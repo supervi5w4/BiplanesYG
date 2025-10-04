@@ -1,0 +1,17 @@
+[gd_scene load_steps=3 format=3 uid="uid://bu06vul32hsix"]
+
+[ext_resource type="Texture2D" uid="uid://w0o0refxah28" path="res://assets/sprites/bg_sky.png" id="1_d5hba"]
+[ext_resource type="PackedScene" uid="uid://bspxfuppqtatn" path="res://scenes/Player.tscn" id="2_d5hba"]
+
+[node name="Battlefield" type="Node2D"]
+
+[node name="Background" type="Sprite2D" parent="."]
+position = Vector2(647, 353)
+texture = ExtResource("1_d5hba")
+
+[node name="SpawnPlayer" type="Node2D" parent="."]
+position = Vector2(81, 108)
+
+[node name="Player" parent="." instance=ExtResource("2_d5hba")]
+position = Vector2(91, 103)
+scale = Vector2(1.4466304, 1.5162706)
