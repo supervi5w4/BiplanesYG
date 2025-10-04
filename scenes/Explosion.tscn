@@ -1,0 +1,45 @@
+[gd_scene load_steps=9 format=3 uid="uid://c8v6un0pr0qmp"]
+
+[ext_resource type="Script" uid="uid://d12y51q3frhni" path="res://scripts/Explosion.gd" id="1_6o7x5"]
+[ext_resource type="Texture2D" path="res://assets/sprites/explode_1.png" id="2_f8d5i"]
+[ext_resource type="Texture2D" path="res://assets/sprites/explode_2.png" id="3_s33d2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/explode_3.png" id="4_qjsk2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/explode_4.png" id="5_to5er"]
+[ext_resource type="Texture2D" path="res://assets/sprites/explode_5.png" id="6_rh5jb"]
+[ext_resource type="Texture2D" path="res://assets/sprites/explode_6.png" id="7_ifdwo"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_vmplm"]
+resource_name = "explode"
+animations = [{
+"frames": [{
+"duration": 0.11,
+"texture": ExtResource("2_f8d5i")
+}, {
+"duration": 0.11,
+"texture": ExtResource("3_s33d2")
+}, {
+"duration": 0.11,
+"texture": ExtResource("4_qjsk2")
+}, {
+"duration": 0.11,
+"texture": ExtResource("5_to5er")
+}, {
+"duration": 0.11,
+"texture": ExtResource("6_rh5jb")
+}, {
+"duration": 0.11,
+"texture": ExtResource("7_ifdwo")
+}],
+"loop": true,
+"name": &"explode",
+"speed": 1.0
+}]
+
+[node name="Explosion" type="Node2D"]
+script = ExtResource("1_6o7x5")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(0.2, 0.2)
+sprite_frames = SubResource("SpriteFrames_vmplm")
+animation = &"explode"
+frame_progress = 0.85280514

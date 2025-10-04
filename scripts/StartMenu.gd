@@ -2,17 +2,17 @@ extends Control
 
 func _ready() -> void:
 	if OS.has_feature("yandex"):
-		# Базовая инициализация SDK
+		# Р‘Р°Р·РѕРІР°СЏ РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ SDK
 		YandexSDK.init_game()
 		YandexSDK.init_player()
 		YandexSDK.data_loaded.connect(_on_data_loaded)
-		# Вызовем game_ready после того, как UI реально показан:
+		# Р’С‹Р·РѕРІРµРј game_ready РїРѕСЃР»Рµ С‚РѕРіРѕ, РєР°Рє UI СЂРµР°Р»СЊРЅРѕ РїРѕРєР°Р·Р°РЅ:
 		call_deferred("_mark_game_ready")
 
 func _mark_game_ready() -> void:
 	if OS.has_feature("yandex"):
 		YandexSDK.game_ready()
-		# Запросим облачные данные по ключу GameState.SAVE_KEY
+		# Р—Р°РїСЂРѕСЃРёРј РѕР±Р»Р°С‡РЅС‹Рµ РґР°РЅРЅС‹Рµ РїРѕ РєР»СЋС‡Сѓ GameState.SAVE_KEY
 		YandexSDK.load_data([GameState.SAVE_KEY])
 
 func _on_data_loaded(data: Dictionary) -> void:
