@@ -5,6 +5,8 @@ func _ready() -> void:
 
 func _on_body_entered(body: Node) -> void:
 	# Взрываем игрока или врага при касании земли
-	if body and body.has_method("explode_on_ground"):
-		if body.is_in_group("player") or body.is_in_group("enemy"):
+	if body and (body.is_in_group("player") or body.is_in_group("enemy")):
+		if body.is_in_group("player") and body.has_method("explode_on_ground"):
 			body.explode_on_ground(body.global_position)
+		elif body.is_in_group("enemy") and body.has_method("_explode"):
+			body._explode(body.global_position)

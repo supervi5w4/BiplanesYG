@@ -1,8 +1,11 @@
 extends Node2D
 
-@onready var anim: AnimatedSprite2D = $AnimatedSprite2D
+var anim: AnimatedSprite2D
 
 func _ready() -> void:
+	
+	# Ищем AnimatedSprite2D
+	anim = get_node_or_null("AnimatedSprite2D")
 	if anim:
 		anim.play("explode")
 		anim.animation_finished.connect(_on_anim_finished)

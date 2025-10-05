@@ -7,9 +7,13 @@ extends CharacterBody2D
 @export var turn_speed: float = 3.2
 @export var accel: float = 900.0
 @export var brake_power: float = 1100.0
-@export var max_speed: float = 520.0
+@export var max_speed: float = 350.0
 @export var drag_linear: float = 0.85
 @export var fire_cooldown: float = 0.14
+
+# === МОДИФИКАЦИЯ СКОРОСТИ ПО ОРИЕНТАЦИИ ===
+@export var orientation_speed_factor: float = 0.3  # Насколько сильно ориентация влияет на скорость (0.0-1.0)
+@export var max_orientation_penalty: float = 0.6   # Максимальное снижение скорости при неоптимальной ориентации
 
 # === ПСЕВДО-ВЕРТИКАЛЬ (высота) ===
 @export var start_altitude: float = 140.0
@@ -26,7 +30,7 @@ extends CharacterBody2D
 @export var liftoff_lift_margin: float = 30.0
 
 # === ВЗРЫВ/РЕСПАУН ===
-@export var explosion_scene: PackedScene = preload("res://scenes/Explosion.tscn")
+@export var explosion_scene: PackedScene
 @export var spawn_path: NodePath
 @export var respawn_delay: float = 3.0
 @export var invuln_time: float = 0.8
@@ -47,6 +51,10 @@ var is_grounded: bool = false
 var is_alive: bool = true
 var invulnerable: bool = false
 
+# Геттер для is_alive для совместимости с Enemy.gd
+func get_is_alive() -> bool:
+	return is_alive
+
 @onready var muzzle: Node2D = $Muzzle
 
 func _ready() -> void:
@@ -57,6 +65,9 @@ func _ready() -> void:
 	is_grounded = false
 	speed = max_speed * 0.5  # Стартовая скорость при запуске игры
 	hp = 10  # Инициализируем HP при создании
+	
+	# Загружаем сцену взрыва
+	explosion_scene = load("res://scenes/Explosion.tscn")
 
 func _physics_process(delta: float) -> void:
 	if not is_alive:
@@ -84,7 +95,10 @@ func _physics_process(delta: float) -> void:
 		if speed < 0.0:
 			speed = 0.0
 
-	speed = clamp(speed, 0.0, max_speed)
+	# Применяем модификатор скорости на основе ориентации
+	var orientation_modifier = _get_orientation_speed_modifier()
+	var effective_max_speed = max_speed * orientation_modifier
+	speed = clamp(speed, 0.0, effective_max_speed)
 
 	# 3) Вертикаль
 	var lift_from_speed: float = _lift_factor_from_speed(speed) * lift_speed_coeff * speed
@@ -99,7 +113,7 @@ func _physics_process(delta: float) -> void:
 		altitude += v_alt * delta
 
 		# Ограничение максимальной высоты полета
-		var max_altitude: float = 200.0  # Максимальная высота полета
+		var max_altitude: float = 300.0  # Максимальная высота полета
 		if altitude > max_altitude:
 			altitude = max_altitude
 			if v_alt > 0:
@@ -154,9 +168,7 @@ func _shoot() -> void:
 func apply_damage(amount: int) -> void:
 	if invulnerable or not is_alive:
 		return
-	print("Player получил урон: ", amount, " HP до: ", hp)
 	hp -= amount
-	print("Player HP после: ", hp)
 	if hp <= 0:
 		explode_on_ground(global_position)
 
@@ -168,7 +180,7 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 	# СРАЗУ отключаем коллайдер, чтобы мертвый игрок не создавал невидимую стену
 	var collision_shape = get_node_or_null("CollisionShape2D")
 	if collision_shape:
-		collision_shape.disabled = true
+		collision_shape.call_deferred("set_disabled", true)
 
 	if explosion_scene:
 		var ex: Node2D = explosion_scene.instantiate() as Node2D
@@ -190,8 +202,21 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 	_respawn()
 
 func _respawn() -> void:
-	# Жестко задаем позицию респавна в небе
-	global_position = Vector2(81, 108)
+	# Используем точку спавна если она задана
+	print("Player spawn_path: ", spawn_path)
+	print("Player has_node(spawn_path): ", has_node(spawn_path) if spawn_path else "spawn_path is null")
+	
+	if spawn_path and has_node(spawn_path):
+		var spawn_node = get_node(spawn_path)
+		print("Player respawn at spawn point: ", spawn_node.global_position)
+		global_position = spawn_node.global_position
+	else:
+		# Fallback к жестко заданной позиции
+		print("Player respawn at fallback position: ", Vector2(81, 108))
+		global_position = Vector2(81, 108)
+	
+	# Устанавливаем правильную ориентацию - горизонтальный полет
+	rotation = 0.0
 	altitude = start_altitude
 
 	hp = 10
@@ -208,7 +233,7 @@ func _respawn() -> void:
 	# Включаем коллайдер обратно
 	var collision_shape = get_node_or_null("CollisionShape2D")
 	if collision_shape:
-		collision_shape.disabled = false
+		collision_shape.call_deferred("set_disabled", false)
 	
 	# Убеждаемся, что игрок в группе "player"
 	if not is_in_group("player"):
@@ -225,6 +250,19 @@ func _lift_factor_from_speed(s: float) -> float:
 		k = clamp(k, 0.0, 1.0)
 		return k * k
 	return 1.0
+
+func _get_orientation_speed_modifier() -> float:
+	# Нормализуем угол поворота к диапазону [-PI, PI]
+	var normalized_rotation = fmod(rotation + PI, 2.0 * PI) - PI
+	
+	# Оптимальная ориентация - горизонтальный полет (rotation = 0)
+	# Чем больше отклонение от горизонтали, тем больше штраф к скорости
+	var orientation_penalty = abs(normalized_rotation) / PI  # 0.0 = горизонтально, 1.0 = вертикально
+	
+	# Применяем штраф с учетом настроек
+	var speed_modifier = 1.0 - (orientation_penalty * orientation_speed_factor * max_orientation_penalty)
+	
+	return clamp(speed_modifier, 1.0 - max_orientation_penalty, 1.0)
 
 func get_altitude() -> float:
 	return altitude
@@ -264,7 +302,8 @@ func _wrap_around_screen() -> void:
 		global_position.x = 0
 	
 	# Ограничение высоты полета - самолет всегда остается в зоне видимости
-	var max_height: float = 50.0  # Максимальная высота от верха экрана
+	# Увеличиваем минимальную высоту, чтобы избежать GroundKill (Y=706)
+	var max_height: float = 5.0  # Минимальная высота от верха экрана
 	
 	if global_position.y < max_height:
 		# Если самолет поднимается слишком высоко, ограничиваем его высоту

@@ -1,597 +1,456 @@
 extends CharacterBody2D
 # ─────────────────────────────────────────────────────────────────────────────
-# Enemy.gd — ИИ-противник с поиском игрока и стрельбой
+# Enemy.gd — МАКСИМАЛЬНО ПРОСТОЙ ИИ (как Player.gd)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# === ПАРАМЕТРЫ ДВИЖЕНИЯ ===
-@export var turn_speed: float = 2.5
-@export var accel: float = 600.0
+# === БАЗОВОЕ ДВИЖЕНИЕ (как у игрока) ===
+@export var turn_speed: float = 2.8
+@export var accel: float = 700.0
 @export var brake_power: float = 800.0
-@export var max_speed: float = 400.0
-@export var drag_linear: float = 0.8
-@export var fire_cooldown: float = 0.3
+@export var max_speed: float = 300.0
+@export var drag_linear: float = 0.9
 
-# === ПСЕВДО-ВЕРТИКАЛЬ (высота) ===
+# === МОДИФИКАЦИЯ СКОРОСТИ ПО ОРИЕНТАЦИИ ===
+@export var orientation_speed_factor: float = 0.25  # Насколько сильно ориентация влияет на скорость (0.0-1.0)
+@export var max_orientation_penalty: float = 0.5   # Максимальное снижение скорости при неоптимальной ориентации
+
+# === ВЫСОТА (как у игрока) ===
 @export var start_altitude: float = 120.0
-@export var gravity_alt: float = 200.0
-@export var lift_speed_coeff: float = 0.8
-@export var lift_throttle_coeff: float = 100.0
-@export var stall_speed_alt: float = 120.0
-@export var stall_soft: float = 35.0
-@export var max_climb_rate: float = 200.0
+@export var gravity_alt: float = 220.0
+@export var lift_speed_coeff: float = 0.9
+@export var lift_throttle_coeff: float = 180.0  # Увеличиваем для лучшего поддержания высоты
+@export var stall_speed_alt: float = 100.0  # Уменьшаем для возможности полета на меньшей скорости
+@export var stall_soft: float = 40.0
+@export var max_climb_rate: float = 220.0
 
 # === НАЗЕМНЫЙ РЕЖИМ ===
 @export var ground_friction: float = 180.0
 @export var liftoff_speed: float = 150.0
 @export var liftoff_lift_margin: float = 25.0
 
-# === ИИ ПАРАМЕТРЫ ===
-@export var detection_range: float = 500.0
-@export var aim_accuracy: float = 0.1  # Радианы для точности прицеливания
-@export var turn_smoothing: float = 0.8  # Сглаживание поворотов
+# === СТРЕЛЬБА ===
+@export var fire_cooldown: float = 0.8
+@export var bullet_speed: float = 820.0
+@export var shooting_delay: float = 2.0  # Задержка перед началом стрельбы
 
-# === ИЗБЕГАНИЕ GROUNDKILL ===
-@export var groundkill_detection_range: float = 200.0  # Дистанция обнаружения GroundKill
-@export var groundkill_avoidance_strength: float = 2.0  # Сила избегания (множитель поворота)
-@export var groundkill_min_altitude: float = 80.0  # Минимальная безопасная высота
-
-# === ВЗРЫВ ===
-@export var explosion_scene: PackedScene = preload("res://scenes/Explosion.tscn")
+# === ВЗРЫВ / РЕСПАВН ===
+@export var explosion_scene: PackedScene
+@export var spawn_path: NodePath
 @export var respawn_delay: float = 3.0
-@export var respawn_enabled: bool = true  # Враг респавнится через 3 секунды
+@export var respawn_enabled: bool = true
+@export var invuln_time: float = 1.0
 
 # === GroundKill ===
 @export var ground_kill_group: String = "GroundKill"
 @export var ground_kill_name: String = "GroundKill"
 
-# === СОСТОЯНИЕ ===
+# === СОСТОЯНИЕ (как у игрока) ===
 var speed: float = 0.0
-var hp: int = 10
-var can_shoot: bool = true
-
 var altitude: float = 0.0
 var v_alt: float = 0.0
 var is_grounded: bool = false
 
+var hp: int = 10
 var is_alive: bool = true
+var can_shoot: bool = true
+var invulnerable: bool = false
+var shooting_started: bool = false
+
 var target_player: Node2D = null
-var target_angle: float = 0.0
-var last_player_search_time: float = 0.0
-
-# === СОСТОЯНИЕ ИЗБЕГАНИЯ GROUNDKILL ===
-var groundkill_threat: bool = false
-var groundkill_avoidance_angle: float = 0.0
-var groundkill_position: Vector2 = Vector2.ZERO
-
-# === НАЧАЛЬНОЕ СОСТОЯНИЕ ===
-var is_starting: bool = true
-var start_safety_time: float = 0.0
 
 @onready var muzzle: Node2D = $Muzzle
 
 func _ready() -> void:
-	# Добавляем в группу врагов
 	add_to_group("enemy")
-	
 	altitude = start_altitude
 	is_grounded = false
-	speed = max_speed * 0.3  # Стартовая скорость врага
-	hp = 10  # Инициализируем HP при создании
+	speed = max_speed * 0.6  # Увеличиваем начальную скорость для поддержания высоты
+	hp = 10
 	
-	# Ищем игрока
+	# Устанавливаем правильную начальную позицию
+	var ground_y: float = 706.0  # Y-координата земли (GroundKill)
+	var initial_y: float = ground_y - start_altitude
+	global_position.y = initial_y
+	
+	# Загружаем сцену взрыва
+	var explosion_path = "res://scenes/Explosion.tscn"
+	if ResourceLoader.exists(explosion_path):
+		explosion_scene = load(explosion_path)
+	
+	# Ищем игрока при создании
 	_find_player()
+	
+	# Запускаем задержку перед началом стрельбы
+	_start_shooting_delay()
 
 func _physics_process(delta: float) -> void:
+	print("Enemy _physics_process called, is_alive: ", is_alive)
 	if not is_alive:
-		# Дополнительная проверка - отключаем коллайдер если он еще активен
 		var collision_shape = get_node_or_null("CollisionShape2D")
 		if collision_shape and not collision_shape.disabled:
-			collision_shape.disabled = true
+			collision_shape.call_deferred("set_disabled", true)
 		return
+
+	# Отладка: проверяем состояние ИИ каждые несколько кадров
+	if int(Time.get_ticks_msec() / 100) % 10 == 0:  # Каждые 1 секунду
+		print("Enemy physics: pos=", global_position, " altitude=", altitude, " speed=", speed, " rotation=", rotation)
+
+	# Периодически ищем игрока (каждые 2 секунды)
+	if int(Time.get_ticks_msec() / 2000) % 2 == 0 and target_player == null:
+		_find_player()
+
+	# === УМНОЕ ДВИЖЕНИЕ К ИГРОКУ ===
+	_ai_movement(delta)
 	
-	# 1) ИИ: Поиск и поворот к игроку
-	_ai_behavior(delta)
-	
-	# 2) Постоянное ускорение
+	# === СКОРОСТЬ ПО КУРСУ + СОПРОТИВЛЕНИЕ ===
 	speed += accel * delta
 	if speed > 0.0:
 		speed -= drag_linear * delta
-		if speed < 0.0:
-			speed = 0.0
+	if speed < 0.0:
+		speed = 0.0
 	
-	speed = clamp(speed, 0.0, max_speed)
+	# Применяем модификатор скорости на основе ориентации
+	var orientation_modifier = _get_orientation_speed_modifier()
+	var effective_max_speed = max_speed * orientation_modifier
+	speed = clamp(speed, 0.0, effective_max_speed)
+
+	# === ВЕРТИКАЛЬНАЯ ДИНАМИКА ===
+	_vertical_update(delta)
+
+	# === ГОРИЗОНТАЛЬНОЕ ДВИЖЕНИЕ ===
+	var heading: Vector2 = Vector2.RIGHT.rotated(rotation)
+	velocity = heading * speed
+	move_and_slide()
+
+	# === ГРАНИЦЫ И КОЛЛИЗИИ ===
+	_wrap_around_screen()
+	_check_groundkill_collisions()
+
+func _ai_movement(delta: float) -> void:
+	if target_player == null or not is_instance_valid(target_player):
+		# Если нет цели, ищем игрока
+		_find_player()
+		if target_player == null:
+			# Если все еще нет цели, просто летим вперед с покачиваниями
+			var wiggle := sin(Time.get_ticks_msec() * 0.001) * 0.1
+			rotation += wiggle * delta
+			return
 	
-	# 3) Вертикаль (поддержание высоты как у игрока)
+	# Проверяем, жив ли игрок
+	var player_alive = target_player.get("is_alive")
+	if player_alive == false:
+		target_player = null
+		return
+	
+	# Вычисляем направление к игроку
+	var to_player = target_player.global_position - global_position
+	var distance_to_player = to_player.length()
+	
+	# Если игрок слишком далеко, летим к нему
+	if distance_to_player > 98.0:
+		var desired_angle = to_player.angle()
+		var current_angle = rotation
+		
+		# Вычисляем разность углов
+		var angle_diff = desired_angle - current_angle
+		
+		# Нормализуем угол к диапазону [-PI, PI]
+		while angle_diff > PI:
+			angle_diff -= 2.0 * PI
+		while angle_diff < -PI:
+			angle_diff += 2.0 * PI
+		
+		# Поворачиваемся к игроку с ограниченной скоростью
+		var max_turn_rate = turn_speed * delta
+		var turn_amount = clamp(angle_diff, -max_turn_rate, max_turn_rate)
+		rotation += turn_amount
+	else:
+		# Если игрок близко, добавляем небольшие покачивания для более естественного движения
+		var wiggle := sin(Time.get_ticks_msec() * 0.002) * 0.05
+		rotation += wiggle * delta
+
+func _process(_dt: float) -> void:
+	if not is_alive:
+		return
+	
+	# Простая стрельба по игроку
+	if target_player and can_shoot and shooting_started:
+		var to_player = (target_player.global_position - global_position).normalized()
+		var angle_to_player = Vector2.RIGHT.rotated(rotation).angle_to(to_player)
+		
+		# Отладка каждые несколько кадров
+		if int(Time.get_ticks_msec() / 100) % 20 == 0:  # Каждые 2 секунды
+			print("Enemy aiming: angle_to_player=", abs(angle_to_player), " threshold=0.14")
+		
+		if abs(angle_to_player) < 0.14:  # Если игрок в прицеле
+			_shoot()
+
+# ==========================
+#   VERTICAL & COLLISIONS
+# ==========================
+func _vertical_update(delta: float) -> void:
+	# Отладка каждые несколько кадров
+	if int(Time.get_ticks_msec() / 100) % 10 == 0:  # Каждую секунду
+		print("Enemy vertical: altitude=", altitude, " v_alt=", v_alt, " is_grounded=", is_grounded, " speed=", speed)
+	
 	var lift_from_speed: float = _lift_factor_from_speed(speed) * lift_speed_coeff * speed
-	var lift_from_throttle: float = lift_throttle_coeff * 0.5  # Постоянная тяга
+	var lift_from_throttle: float = lift_throttle_coeff * 0.5
 	var lift_total: float = lift_from_speed + lift_from_throttle
 	var down: float = gravity_alt
 	var a_alt: float = lift_total - down
-	
+
 	if not is_grounded:
 		v_alt += a_alt * delta
 		v_alt = clamp(v_alt, -max_climb_rate, max_climb_rate)
 		altitude += v_alt * delta
 		
-		# Ограничение максимальной высоты полета
-		var max_altitude: float = 180.0
+		# Отладка падения
+		if v_alt < -50.0:  # Если падаем быстро
+			print("Enemy falling fast: v_alt=", v_alt, " altitude=", altitude)
+		
+		var max_altitude: float = 200.0
 		if altitude > max_altitude:
 			altitude = max_altitude
-			if v_alt > 0:
-				v_alt = 0
+			if v_alt > 0.0:
+				v_alt = 0.0
 		
 		if altitude <= 0.0:
 			altitude = 0.0
 			v_alt = 0.0
 			is_grounded = true
+			print("Enemy grounded due to altitude <= 0.0")
 	else:
 		altitude = 0.0
 		v_alt = 0.0
-		
 		if speed > 0.0:
 			speed -= ground_friction * delta
 			if speed < 0.0:
 				speed = 0.0
-		
 		if speed >= liftoff_speed and (lift_total - down) > liftoff_lift_margin:
 			is_grounded = false
 			v_alt = max(v_alt, 50.0)
 			altitude += v_alt * delta
-	
-	# 4) Горизонталь
-	var heading: Vector2 = Vector2.RIGHT.rotated(rotation)
-	velocity = heading * speed
-	move_and_slide()
-	
-	# 5) Заворачивание за края экрана
-	_wrap_around_screen()
-	
-	# 6) Проверка столкновений с GroundKill
-	_check_groundkill_collisions()
 
-func _process(_dt: float) -> void:
-	if is_alive and can_shoot and target_player:
-		# Стреляем, если угол на игрока < 0.1 рад
-		var angle_to_player: float = abs(_get_angle_to_player())
-		if angle_to_player < aim_accuracy:
-			_shoot()
-
-func _ai_behavior(delta: float) -> void:
-	# 1) Проверяем начальное состояние безопасности
-	if is_starting:
-		_handle_starting_safety(delta)
-		return
+func _check_groundkill_collisions() -> void:
+	print("Enemy _check_groundkill_collisions called")
+	# Отладка: проверяем расстояние до земли
+	var ground_y: float = 706.0
+	var distance_to_ground: float = ground_y - global_position.y
+	if int(Time.get_ticks_msec() / 100) % 10 == 0:  # Каждую секунду
+		print("Enemy ground check: pos_y=", global_position.y, " distance_to_ground=", distance_to_ground, " altitude=", altitude, " is_grounded=", is_grounded)
 	
-	# 2) Проверяем угрозу GroundKill
-	_detect_groundkill()
+	var collision_count = get_slide_collision_count()
+	if collision_count > 0:
+		print("Enemy has ", collision_count, " collisions")
 	
-	# 3) Если есть угроза GroundKill, приоритет - избегание
-	if groundkill_threat:
-		_ai_avoid_groundkill(delta)
-		return
-	
-	# 3) Поиск игрока, если его нет
-	if not target_player or not is_instance_valid(target_player):
-		_find_player()
-		
-		# Если игрок все еще не найден, ИИ продолжает полет
-		if not target_player or not is_instance_valid(target_player):
-			_ai_flight_without_target(delta)
-			return
-	
-	# 4) Проверяем, жив ли игрок перед использованием target_player
-	if target_player.has_method("is_alive") and not target_player.is_alive:
-		# Игрок мертв, сбрасываем цель и переходим к полету без цели
-		target_player = null
-		_ai_flight_without_target(delta)
-		# Ищем нового игрока после сброса цели
-		_find_player()
-		return
-	
-	# 5) Вычисляем угол к игроку
-	var angle_to_player: float = _get_angle_to_player()
-	
-	# 6) Дополнительная проверка безопасности: не поворачиваемся к игроку, 
-	# если это может направить нас в GroundKill
-	var safe_to_turn = _is_safe_to_turn_to_player(angle_to_player)
-	
-	if safe_to_turn:
-		# Поворачиваемся к игроку с сглаживанием
-		var turn_direction: float = sign(angle_to_player)
-		rotation += turn_direction * turn_speed * delta * turn_smoothing
-	else:
-		# Небезопасно поворачиваться к игроку, набираем высоту
-		if altitude < groundkill_min_altitude * 1.5:
-			v_alt = max(v_alt + 100.0 * delta, max_climb_rate * 0.7)
-	
-	# 7) Проверяем расстояние до игрока
-	var distance_to_player: float = global_position.distance_to(target_player.global_position)
-	if distance_to_player > detection_range:
-		# Если игрок слишком далеко, ищем нового
-		_find_player()
-		
-		# Если игрок не найден, переходим к полету без цели
-		if not target_player or not is_instance_valid(target_player):
-			_ai_flight_without_target(delta)
-
-func _handle_starting_safety(delta: float) -> void:
-	# Обрабатываем начальное состояние безопасности
-	# В начале раунда ИИ должен набрать безопасную высоту перед преследованием игрока
-	
-	start_safety_time += delta
-	
-	# 1) Приоритет - набор безопасной высоты
-	if altitude < groundkill_min_altitude * 1.5:  # Безопасная высота
-		v_alt = max(v_alt + 100.0 * delta, max_climb_rate * 0.8)
-	
-	# 2) Небольшой поворот для естественного полета
-	var random_turn: float = randf_range(-0.3, 0.3) * turn_speed * delta
-	rotation += random_turn
-	
-	# 3) Увеличиваем скорость для набора высоты
-	if speed < max_speed * 0.6:
-		speed += accel * delta * 0.8
-	
-	# 4) Проверяем, можно ли перейти к нормальному поведению
-	if altitude >= groundkill_min_altitude * 1.5 and start_safety_time > 2.0:
-		is_starting = false
-		print("ИИ переходит к нормальному поведению. Высота: ", altitude)
-		_find_player()
-
-func _ai_avoid_groundkill(delta: float) -> void:
-	# ИИ избегает GroundKill - набирает высоту и поворачивает в сторону
-	# ПРИОРИТЕТ: Полностью игнорируем игрока до устранения угрозы
-	
-	# 1) Приоритет - набор высоты для избегания GroundKill
-	if altitude < groundkill_min_altitude * 2.0:  # Увеличиваем безопасную высоту
-		v_alt = max(v_alt + 150.0 * delta, max_climb_rate * 0.9)
-	
-	# 2) Поворот в направлении избегания
-	if abs(groundkill_avoidance_angle) > 0.01:  # Если есть угол для поворота
-		var turn_direction: float = sign(groundkill_avoidance_angle)
-		rotation += turn_direction * turn_speed * delta * groundkill_avoidance_strength
-	
-	# 3) Увеличиваем скорость для быстрого ухода от опасности
-	if speed < max_speed * 0.8:
-		speed += accel * delta * 1.5
-	
-	# 4) Периодически проверяем, можно ли вернуться к преследованию игрока
-	last_player_search_time += delta
-	if last_player_search_time > 0.5:  # Проверяем чаще при избегании
-		_detect_groundkill()
-		if not groundkill_threat:
-			# Угроза миновала, возвращаемся к поиску игрока
-			_find_player()
-		last_player_search_time = 0.0
-
-func _ai_flight_without_target(delta: float) -> void:
-	# ИИ продолжает полет без цели - набирает высоту и скорость
-	
-	# Небольшой поворот в случайном направлении для естественного полета
-	var random_turn: float = randf_range(-0.5, 0.5) * turn_speed * delta
-	rotation += random_turn
-	
-	# Набираем высоту, если слишком низко
-	if altitude < start_altitude * 1.5:
-		# Увеличиваем вертикальную скорость для набора высоты
-		v_alt = min(v_alt + 50.0 * delta, max_climb_rate * 0.8)
-	
-	# Поддерживаем хорошую скорость полета
-	if speed < max_speed * 0.7:
-		speed += accel * delta * 0.5  # Медленное ускорение
-	
-	# Периодически ищем игрока (каждые 2 секунды)
-	last_player_search_time += delta
-	if last_player_search_time > 2.0:
-		_find_player()
-		last_player_search_time = 0.0
-
-func _is_safe_to_turn_to_player(angle_to_player: float) -> bool:
-	# Проверяем, безопасно ли поворачиваться к игроку
-	# Возвращаем false, если поворот может направить нас в GroundKill
-	
-	# Если мы слишком низко, не поворачиваемся к игроку
-	if altitude <= groundkill_min_altitude:
-		return false
-	
-	# Ищем GroundKill в сцене
-	var groundkill_nodes = get_tree().get_nodes_in_group(ground_kill_group)
-	if groundkill_nodes.size() == 0:
-		var groundkill_node = get_tree().get_first_node_in_group(ground_kill_group)
-		if not groundkill_node:
-			groundkill_node = get_tree().current_scene.get_node_or_null(ground_kill_name)
-		if groundkill_node:
-			groundkill_nodes = [groundkill_node]
-	
-	# Проверяем каждую GroundKill
-	for groundkill in groundkill_nodes:
-		if not is_instance_valid(groundkill):
+	for i in range(collision_count):
+		var c: KinematicCollision2D = get_slide_collision(i)
+		var col := c.get_collider()
+		if col == null:
 			continue
-			
-		var distance_to_groundkill = global_position.distance_to(groundkill.global_position)
-		
-		# Если GroundKill близко, проверяем направление поворота
-		if distance_to_groundkill <= groundkill_detection_range * 1.5:
-			var direction_to_groundkill = (groundkill.global_position - global_position).normalized()
-			var current_direction = Vector2.RIGHT.rotated(rotation)
-			var future_direction = Vector2.RIGHT.rotated(rotation + angle_to_player * 0.1)  # Предполагаемое направление
-			
-			# Если поворот к игроку приближает нас к GroundKill, это небезопасно
-			var current_dot = current_direction.dot(direction_to_groundkill)
-			var future_dot = future_direction.dot(direction_to_groundkill)
-			
-			if future_dot > current_dot:  # Поворот приближает к GroundKill
-				return false
-	
-	return true
-
-func _detect_groundkill() -> void:
-	# Сбрасываем состояние угрозы
-	var previous_threat = groundkill_threat
-	groundkill_threat = false
-	groundkill_avoidance_angle = 0.0
-	
-	# Ищем GroundKill в сцене
-	var groundkill_nodes = get_tree().get_nodes_in_group(ground_kill_group)
-	if groundkill_nodes.size() == 0:
-		# Если группа не найдена, ищем по имени
-		var groundkill_node = get_tree().get_first_node_in_group(ground_kill_group)
-		if not groundkill_node:
-			groundkill_node = get_tree().current_scene.get_node_or_null(ground_kill_name)
-		
-		if groundkill_node:
-			groundkill_nodes = [groundkill_node]
-	
-	# Проверяем расстояние до каждой GroundKill
-	for groundkill in groundkill_nodes:
-		if not is_instance_valid(groundkill):
-			continue
-			
-		var distance_to_groundkill = global_position.distance_to(groundkill.global_position)
-		
-		# Упрощенная логика: угроза если мы слишком низко И близко к GroundKill
-		# В начале раунда используем более строгие условия
-		var detection_range_multiplier = 1.0
-		var altitude_threshold = groundkill_min_altitude
-		
-		if is_starting:
-			detection_range_multiplier = 1.5  # Увеличиваем зону обнаружения в начале
-			altitude_threshold = groundkill_min_altitude * 1.2  # Более строгий порог высоты
-		
-		if altitude <= altitude_threshold and distance_to_groundkill <= groundkill_detection_range * detection_range_multiplier:
-			groundkill_threat = true
-			groundkill_position = groundkill.global_position
-			
-			# Простое направление избегания: поворачиваем в сторону от GroundKill
-			var direction_to_groundkill = (groundkill_position - global_position).normalized()
-			
-			# Определяем направление избегания
-			var avoidance_direction: Vector2
-			if direction_to_groundkill.x > 0:
-				# GroundKill справа, поворачиваем влево (отрицательный угол)
-				avoidance_direction = Vector2(-1, 0)
-			else:
-				# GroundKill слева, поворачиваем вправо (положительный угол)
-				avoidance_direction = Vector2(1, 0)
-			
-			# Вычисляем угол поворота
-			var current_direction = Vector2.RIGHT.rotated(rotation)
-			groundkill_avoidance_angle = avoidance_direction.angle_to(current_direction)
-			
-			# Ограничиваем угол избегания
-			groundkill_avoidance_angle = clamp(groundkill_avoidance_angle, -PI/3, PI/3)
-			break
-	
-	# Обновляем отладочную информацию при изменении состояния
-	if previous_threat != groundkill_threat:
-		queue_redraw()
-
-func _find_player() -> void:
-	# Очищаем предыдущую ссылку
-	target_player = null
-	
-	# Ищем игрока в группе "player"
-	var players = get_tree().get_nodes_in_group("player")
-	if players.size() > 0:
-		for player in players:
-			# Проверяем, что игрок жив и валиден
-			if player.has_method("is_alive") and player.is_alive:
-				target_player = player
-				return
-			elif not player.has_method("is_alive"):
-				# Если у игрока нет метода is_alive, считаем его живым
-				target_player = player
-				return
-	
-	# Если группа не найдена или игроки мертвы, ищем по имени
-	var player_node = get_tree().get_first_node_in_group("player")
-	if player_node and is_instance_valid(player_node):
-		if player_node.has_method("is_alive") and player_node.is_alive:
-			target_player = player_node
+		print("Enemy collision with: ", col.name, " at position: ", c.get_position())
+		var hit_kill: bool = false
+		if col is Node:
+			var n := col as Node
+			if ground_kill_group != "" and n.is_in_group(ground_kill_group):
+				hit_kill = true
+				print("Enemy hit GroundKill by group: ", ground_kill_group, " at position: ", c.get_position())
+			elif ground_kill_name != "" and n.name == ground_kill_name:
+				hit_kill = true
+				print("Enemy hit GroundKill by name: ", ground_kill_name, " at position: ", c.get_position())
+		if hit_kill:
+			print("Enemy exploding due to GroundKill collision at position: ", c.get_position())
+			_explode(c.get_position())
 			return
-		elif not player_node.has_method("is_alive"):
-			target_player = player_node
-			return
-	
-	# Последний вариант - поиск по имени сцены
-	var scene = get_tree().current_scene
-	if scene and scene.has_method("get_node"):
-		var player = scene.get_node_or_null("Player")
-		if player and is_instance_valid(player):
-			if player.has_method("is_alive") and player.is_alive:
-				target_player = player
-				return
-			elif not player.has_method("is_alive"):
-				target_player = player
-				return
 
-func _get_angle_to_player() -> float:
-	if not target_player or not is_instance_valid(target_player):
-		return 0.0
-	
-	# Получаем размеры экрана для wrap-around логики
+func _wrap_around_screen() -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var screen_width: float = viewport_size.x
-	
-	# Вычисляем базовый вектор к игроку
-	var base_vector: Vector2 = target_player.global_position - global_position
-	
-	# Если есть угроза GroundKill, НЕ используем wrap-around логику
-	# Это предотвращает направление ИИ через GroundKill
-	if groundkill_threat:
-		# Используем только прямой путь к игроку
-		var direction_to_player: Vector2 = base_vector.normalized()
-		var current_direction: Vector2 = Vector2.RIGHT.rotated(rotation)
-		return current_direction.angle_to(direction_to_player)
-	
-	# Рассматриваем три варианта: обычный, с смещением +screen_width и -screen_width
-	var vectors: Array[Vector2] = [
-		base_vector,  # Обычный вектор
-		base_vector + Vector2(screen_width, 0),  # Смещение вправо
-		base_vector - Vector2(screen_width, 0)   # Смещение влево
-	]
-	
-	# Находим вектор с наименьшим расстоянием
-	var shortest_vector: Vector2 = vectors[0]
-	var shortest_distance: float = vectors[0].length()
-	
-	for i in range(1, vectors.size()):
-		var distance: float = vectors[i].length()
-		if distance < shortest_distance:
-			shortest_distance = distance
-			shortest_vector = vectors[i]
-	
-	# Нормализуем выбранный вектор и вычисляем угол
-	var direction_to_player: Vector2 = shortest_vector.normalized()
-	var current_direction: Vector2 = Vector2.RIGHT.rotated(rotation)
-	
-	return current_direction.angle_to(direction_to_player)
+	var w := viewport_size.x
+	var h := viewport_size.y
+	if global_position.x < 0.0:
+		global_position.x = w
+	elif global_position.x > w:
+		global_position.x = 0.0
+	var pad := 40.0
+	var min_height := 150.0
+	if global_position.y < min_height:
+		global_position.y = min_height
+		if v_alt < 0.0:
+			v_alt = 0.0
+	elif global_position.y > h - pad:
+		global_position.y = h - pad
+		if v_alt > 0.0:
+			v_alt = 0.0
 
+# ==========================
+#   SHOOT / DAMAGE / FX
+# ==========================
 func _shoot() -> void:
 	can_shoot = false
+	print("Enemy shooting at player! Enemy pos: ", global_position, " Player pos: ", target_player.global_position if target_player else "no target")
 	var scene: PackedScene = preload("res://scenes/Bullet.tscn")
-	var b: Node2D = scene.instantiate() as Node2D
+	var b := scene.instantiate() as Node2D
 	b.global_position = muzzle.global_position
 	b.rotation = rotation
-	var bullet_vel: Vector2 = Vector2.RIGHT.rotated(rotation) * 800.0 + velocity
-	b.set("velocity", bullet_vel)
-	
-	# Пули врага игнорируют группу "enemy"
-	b.ignore_group = "enemy"
-	
+	var bullet_vel: Vector2 = Vector2.RIGHT.rotated(rotation) * bullet_speed + velocity
+	if "velocity" in b:
+		b.set("velocity", bullet_vel)
+	if "ignore_group" in b:
+		b.set("ignore_group", "enemy")
 	get_tree().current_scene.add_child(b)
 	await get_tree().create_timer(fire_cooldown).timeout
 	can_shoot = true
 
 func apply_damage(amount: int) -> void:
-	if not is_alive:
+	print("Enemy apply_damage called with amount: ", amount, " is_alive: ", is_alive, " invulnerable: ", invulnerable)
+	if not is_alive or invulnerable:
+		print("Enemy damage blocked - not alive or invulnerable")
 		return
-	print("Enemy получил урон: ", amount, " HP до: ", hp)
+	
+	print("Enemy taking damage: ", amount, " HP before: ", hp)
 	hp -= amount
-	print("Enemy HP после: ", hp)
+	print("Enemy HP after damage: ", hp)
+	
 	if hp <= 0:
-		explode_on_ground(global_position)
+		print("Enemy exploding due to HP <= 0")
+		_explode(global_position)
 
-func explode_on_ground(hit_pos: Vector2) -> void:
+func _explode(hit_pos: Vector2) -> void:
 	if not is_alive:
 		return
 	
-	# СРАЗУ отключаем коллайдер, чтобы мертвый враг не создавал невидимую стену
+	print("Enemy _explode called at position: ", hit_pos, " current position: ", global_position)
+	
+	# Отключаем коллайдер
 	var collision_shape = get_node_or_null("CollisionShape2D")
 	if collision_shape:
-		collision_shape.disabled = true
-	
+		collision_shape.call_deferred("set_disabled", true)
+
+	# Создаем взрыв
 	if explosion_scene:
 		var ex: Node2D = explosion_scene.instantiate() as Node2D
-		ex.global_position = hit_pos
-		get_tree().current_scene.add_child(ex)
-	
+		if ex:
+			ex.global_position = hit_pos
+			get_tree().current_scene.add_child(ex)
+
+	# Устанавливаем состояние смерти
 	is_alive = false
 	visible = false
 	set_physics_process(false)
 	can_shoot = false
 	
-	# Очищаем состояние врага и полностью останавливаем движение
+	# Останавливаем движение
 	speed = 0.0
 	v_alt = 0.0
 	altitude = 0.0
 	is_grounded = true
-	velocity = Vector2.ZERO  # Полностью останавливаем движение
-	target_player = null  # Очищаем ссылку на игрока
+	velocity = Vector2.ZERO
 	
-	# Временно удаляем из группы врагов
+	# Очищаем цели
+	target_player = null
 	remove_from_group("enemy")
 	
+	print("Enemy exploded, respawn in ", respawn_delay, " seconds")
+	
+	# Респавн или удаление
 	if respawn_enabled:
 		await get_tree().create_timer(respawn_delay).timeout
 		_respawn()
 	else:
-		# Враг не респавнится, просто исчезает
 		queue_free()
 
 func _respawn() -> void:
-	# Респавн врага в случайной позиции справа от экрана
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var spawn_x: float = viewport_size.x + 100.0  # За правым краем экрана с большим отступом
-	var spawn_y: float = randf_range(100.0, viewport_size.y * 0.7)  # Случайная высота
+	# Сразу устанавливаем неуязвимость для защиты от пуль
+	invulnerable = true
 	
-	global_position = Vector2(spawn_x, spawn_y)
-	altitude = start_altitude
+	# Используем точку спавна если она задана
+	if spawn_path and has_node(spawn_path):
+		var spawn_node = get_node(spawn_path)
+		print("Enemy respawn at spawn point: ", spawn_node.global_position)
+		# Рассчитываем правильную Y-координату на основе высоты над землей
+		var ground_y: float = 706.0  # Y-координата земли (GroundKill)
+		var spawn_y: float = ground_y - start_altitude
+		global_position = Vector2(spawn_node.global_position.x, spawn_y)
+		altitude = start_altitude
+	else:
+		# Fallback к случайной позиции справа от экрана
+		var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+		var spawn_x: float = viewport_size.x + 200.0
+		var ground_y: float = 706.0  # Y-координата земли (GroundKill)
+		var spawn_y: float = ground_y - start_altitude
+		var spawn_position = Vector2(spawn_x, spawn_y)
+		print("Enemy respawn at fallback position: ", spawn_position)
+		global_position = spawn_position
+		altitude = start_altitude
 	
-	hp = 10  # Восстанавливаем HP врага
-	speed = max_speed * 0.3  # Стартовая скорость врага
+	# Устанавливаем правильную ориентацию - горизонтальный полет
+	rotation = PI  # ИИ летит влево (180 градусов)
+	
+	hp = 10
+	speed = max_speed * 0.6  # Увеличиваем начальную скорость для поддержания высоты
 	v_alt = 0.0
 	is_grounded = false
-	velocity = Vector2.ZERO  # Убеждаемся, что нет остаточной скорости
-	last_player_search_time = 0.0  # Сбрасываем таймер поиска игрока
+	velocity = Vector2.ZERO
 	
-	# Сбрасываем состояние избегания GroundKill
-	groundkill_threat = false
-	groundkill_avoidance_angle = 0.0
-	groundkill_position = Vector2.ZERO
-	
-	# Сбрасываем начальное состояние
-	is_starting = true
-	start_safety_time = 0.0
-	
+	# Восстанавливаем видимость и физику
 	visible = true
 	set_physics_process(true)
 	is_alive = true
 	can_shoot = true
+	shooting_started = false
 	
-	# Включаем коллайдер обратно
+	# Включаем коллайдер
 	var collision_shape = get_node_or_null("CollisionShape2D")
 	if collision_shape:
-		collision_shape.disabled = false
+		collision_shape.call_deferred("set_disabled", false)
 	
-	# Возвращаем в группу врагов
+	# Возвращаем в группу
 	add_to_group("enemy")
 	
-	# Ищем игрока заново
+	print("Enemy respawned successfully at: ", global_position, " altitude: ", altitude)
+	
+	# Ищем игрока
 	_find_player()
+	
+	# Запускаем задержку перед началом стрельбы
+	_start_shooting_delay()
+	
+	# Временная неуязвимость (уже установлена в начале функции)
+	await get_tree().create_timer(invuln_time).timeout
+	invulnerable = false
+	print("Enemy invulnerability ended")
 
-# === ОТЛАДОЧНАЯ ИНФОРМАЦИЯ ===
-func _draw() -> void:
-	if not is_alive:
+func _find_player() -> void:
+	target_player = null
+	print("Enemy searching for player...")
+	
+	var players := get_tree().get_nodes_in_group("player")
+	print("Found players in group: ", players.size())
+	for p in players:
+		var alive_prop: bool = p.get("is_alive")
+		print("Player ", p.name, " is_alive: ", alive_prop)
+		if alive_prop == false:
+			continue
+		target_player = p
+		print("Enemy found target player: ", p.name, " at position: ", p.global_position)
 		return
 	
-	# Рисуем зону обнаружения GroundKill
-	if groundkill_threat:
-		# Красный круг - зона угрозы
-		draw_circle(Vector2.ZERO, groundkill_detection_range, Color(1, 0, 0, 0.3))
-		
-		# Стрелка направления избегания
-		var avoidance_end = Vector2.RIGHT.rotated(groundkill_avoidance_angle) * 50
-		draw_line(Vector2.ZERO, avoidance_end, Color.RED, 3.0)
-		
-		# Линия к GroundKill
-		var groundkill_local = to_local(groundkill_position)
-		draw_line(Vector2.ZERO, groundkill_local, Color.YELLOW, 2.0)
-	else:
-		# Зеленый круг - зона обнаружения
-		draw_circle(Vector2.ZERO, groundkill_detection_range, Color(0, 1, 0, 0.1))
+	var scene := get_tree().current_scene
+	if scene:
+		var pl := scene.get_node_or_null("Player")
+		if pl and is_instance_valid(pl):
+			var alive_prop2: bool = pl.get("is_alive")
+			print("Found Player node directly, is_alive: ", alive_prop2)
+			if alive_prop2 != false:
+				target_player = pl
+				print("Enemy found target player directly: ", pl.name, " at position: ", pl.global_position)
+	
+	if target_player == null:
+		print("Enemy could not find any player!")
 
-# === ВСПОМОГАТЕЛЬНОЕ ===
+# ==========================
+#     HELPERS
+# ==========================
 func _lift_factor_from_speed(s: float) -> float:
 	if s <= stall_speed_alt:
 		var k: float = (s - (stall_speed_alt - stall_soft)) / max(stall_soft, 1.0)
@@ -599,46 +458,21 @@ func _lift_factor_from_speed(s: float) -> float:
 		return k * k
 	return 1.0
 
-func get_altitude() -> float:
-	return altitude
-
-func get_vertical_speed() -> float:
-	return v_alt
-
-func _check_groundkill_collisions() -> void:
-	for i in range(get_slide_collision_count()):
-		var c: KinematicCollision2D = get_slide_collision(i)
-		var col := c.get_collider()
-		if col == null:
-			continue
-		
-		var hit_kill: bool = false
-		if col is Node:
-			var n := col as Node
-			if ground_kill_group != "" and n.is_in_group(ground_kill_group):
-				hit_kill = true
-			elif ground_kill_name != "" and n.name == ground_kill_name:
-				hit_kill = true
-		
-		if hit_kill:
-			explode_on_ground(c.get_position())
-			return
-
-func _wrap_around_screen() -> void:
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var screen_width: float = viewport_size.x
-	var _screen_height: float = viewport_size.y
+func _get_orientation_speed_modifier() -> float:
+	# Нормализуем угол поворота к диапазону [-PI, PI]
+	var normalized_rotation = fmod(rotation + PI, 2.0 * PI) - PI
 	
-	# Заворачивание по горизонтали
-	if global_position.x < 0:
-		global_position.x = screen_width
-	elif global_position.x > screen_width:
-		global_position.x = 0
+	# Оптимальная ориентация - горизонтальный полет (rotation = 0)
+	# Чем больше отклонение от горизонтали, тем больше штраф к скорости
+	var orientation_penalty = abs(normalized_rotation) / PI  # 0.0 = горизонтально, 1.0 = вертикально
 	
-	# Ограничение высоты полета
-	var max_height: float = 40.0
+	# Применяем штраф с учетом настроек
+	var speed_modifier = 1.0 - (orientation_penalty * orientation_speed_factor * max_orientation_penalty)
 	
-	if global_position.y < max_height:
-		global_position.y = max_height
-		if v_alt > 0:
-			v_alt = 0
+	return clamp(speed_modifier, 1.0 - max_orientation_penalty, 1.0)
+
+func _start_shooting_delay() -> void:
+	shooting_started = false
+	await get_tree().create_timer(shooting_delay).timeout
+	shooting_started = true
+	print("Enemy started shooting after delay")

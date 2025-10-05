@@ -14,15 +14,19 @@ position = Vector2(647, 353)
 texture = ExtResource("1_d5hba")
 
 [node name="SpawnPlayer" type="Node2D" parent="."]
-position = Vector2(48, 469)
+position = Vector2(135, 474)
+
+[node name="SpawnEnemy" type="Node2D" parent="."]
+position = Vector2(1106, 300)
 
 [node name="Player" parent="." instance=ExtResource("2_d5hba")]
-position = Vector2(52, 474)
+position = Vector2(135, 474)
 scale = Vector2(1.4466304, 1.5162706)
-spawn_path = NodePath("SpawnPlayer")
+spawn_path = NodePath("../SpawnPlayer")
 
 [node name="Enemy" parent="." instance=ExtResource("2_enemy")]
-position = Vector2(1203, 457)
+position = Vector2(1106, 300)
+spawn_path = NodePath("../SpawnEnemy")
 
 [node name="GroundLine" type="Node2D" parent="."]
 position = Vector2(0, 656)
@@ -31,6 +35,6 @@ position = Vector2(0, 656)
 script = ExtResource("3_j68fe")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="GroundKill"]
-position = Vector2(-5.999999, 706)
-scale = Vector2(1000, 5)
+position = Vector2(640, 706)
+scale = Vector2(1280, 5)
 shape = SubResource("RectangleShape2D_d5hba")

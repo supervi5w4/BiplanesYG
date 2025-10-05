@@ -18,6 +18,7 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 func _on_Bullet_body_entered(body: Node) -> void:
+	
 	if body == self:
 		return
 	
@@ -25,8 +26,10 @@ func _on_Bullet_body_entered(body: Node) -> void:
 	if ignore_group != "" and body.is_in_group(ignore_group):
 		return
 	
+	print("Bullet hit: ", body.name, " at position: ", global_position)
 	
 	# Наносим урон и вызываем взрыв
 	if body.has_method("apply_damage"):
 		body.apply_damage(10)
+	
 	queue_free()
