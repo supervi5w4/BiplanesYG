@@ -52,6 +52,7 @@ var invulnerable: bool = false
 func _ready() -> void:
 	altitude = start_altitude
 	is_grounded = false
+	speed = max_speed * 0.5  # Стартовая скорость при запуске игры
 
 func _physics_process(delta: float) -> void:
 	if not is_alive:
@@ -89,6 +90,13 @@ func _physics_process(delta: float) -> void:
 		v_alt = clamp(v_alt, -max_climb_rate, max_climb_rate)
 		altitude += v_alt * delta
 
+		# Ограничение максимальной высоты полета
+		var max_altitude: float = 200.0  # Максимальная высота полета
+		if altitude > max_altitude:
+			altitude = max_altitude
+			if v_alt > 0:
+				v_alt = 0
+
 		if altitude <= 0.0:
 			altitude = 0.0
 			v_alt = 0.0
@@ -112,7 +120,10 @@ func _physics_process(delta: float) -> void:
 	velocity = heading * speed
 	move_and_slide()
 
-	# 5) Проверка столкновений с GroundKill
+	# 5) Заворачивание за края экрана
+	_wrap_around_screen()
+
+	# 6) Проверка столкновений с GroundKill
 	_check_groundkill_collisions()
 
 func _process(_dt: float) -> void:
@@ -162,13 +173,12 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 	_respawn()
 
 func _respawn() -> void:
-	var spawn: Node2D = get_node_or_null(spawn_path) as Node2D
-	if spawn:
-		global_position = spawn.global_position
+	# Жестко задаем позицию респавна в небе
+	global_position = Vector2(81, 108)
+	altitude = start_altitude
 
 	hp = 100
-	speed = 0.0
-	altitude = start_altitude
+	speed = max_speed * 0.5  # Стартовая скорость - половина от максимальной
 	v_alt = 0.0
 	is_grounded = false
 
@@ -213,3 +223,25 @@ func _check_groundkill_collisions() -> void:
 		if hit_kill:
 			explode_on_ground(c.get_position())
 			return
+
+# === ЗАВОРАЧИВАНИЕ ЗА КРАЯ ЭКРАНА ===
+func _wrap_around_screen() -> void:
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var screen_width: float = viewport_size.x
+	var _screen_height: float = viewport_size.y
+	
+	# Заворачивание по горизонтали
+	if global_position.x < 0:
+		global_position.x = screen_width
+	elif global_position.x > screen_width:
+		global_position.x = 0
+	
+	# Ограничение высоты полета - самолет всегда остается в зоне видимости
+	var max_height: float = 50.0  # Максимальная высота от верха экрана
+	
+	if global_position.y < max_height:
+		# Если самолет поднимается слишком высоко, ограничиваем его высоту
+		global_position.y = max_height
+		# Останавливаем вертикальное движение вверх
+		if v_alt > 0:
+			v_alt = 0

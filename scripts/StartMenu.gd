@@ -18,9 +18,5 @@ func _mark_game_ready() -> void:
 func _on_data_loaded(data: Dictionary) -> void:
 	GameState.apply_cloud_save(data)
 
-func _on_Button_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
-
-
 func _on_button_pressed() -> void:
-	pass # Replace with function body.
+	get_tree().change_scene_to_file("res://scenes/battlefield.tscn")

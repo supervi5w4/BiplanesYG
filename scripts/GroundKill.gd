@@ -6,4 +6,4 @@ func _ready() -> void:
 func _on_body_entered(body: Node) -> void:
 	# Взрываем только игрока
 	if body and body.is_in_group("player") and body.has_method("explode_on_ground"):
-		body.explode_on_ground(global_position)
+		body.explode_on_ground(body.global_position)
