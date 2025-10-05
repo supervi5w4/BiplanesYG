@@ -127,7 +127,7 @@ func _physics_process(delta: float) -> void:
 	_check_groundkill_collisions()
 
 func _process(_dt: float) -> void:
-	if is_alive and Input.is_action_pressed("shoot") and can_shoot:
+	if is_alive and Input.is_action_just_pressed("shoot") and can_shoot:
 		_shoot()
 
 func _shoot() -> void:

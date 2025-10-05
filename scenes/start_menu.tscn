@@ -21,17 +21,18 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = 345.0
-offset_top = 134.99998
-offset_right = 473.0
-offset_bottom = 192.99998
+offset_left = 209.0
+offset_top = 163.0
+offset_right = 609.0
+offset_bottom = 363.0
 grow_horizontal = 2
 grow_vertical = 2
-scale = Vector2(4.571641, 4.7677436)
+scale = Vector2(2, 2)
 
 [node name="Label" type="Label" parent="VBoxContainer"]
 layout_mode = 2
 text = "Небесная дуэль"
+horizontal_alignment = 1
 
 [node name="Button" type="Button" parent="VBoxContainer"]
 layout_mode = 2

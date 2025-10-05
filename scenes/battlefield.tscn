@@ -18,6 +18,7 @@ position = Vector2(81, 108)
 [node name="Player" parent="." instance=ExtResource("2_d5hba")]
 position = Vector2(91, 103)
 scale = Vector2(1.4466304, 1.5162706)
+spawn_path = NodePath("SpawnPlayer")
 
 [node name="GroundLine" type="Node2D" parent="."]
 position = Vector2(0, 656)
