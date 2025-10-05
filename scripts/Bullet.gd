@@ -1,5 +1,6 @@
 extends Area2D
 @export var speed := 800.0
+@export var ignore_group: String = ""
 var velocity: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
@@ -19,9 +20,13 @@ func _physics_process(delta: float) -> void:
 func _on_Bullet_body_entered(body: Node) -> void:
 	if body == self:
 		return
-	# Не сталкиваемся с игроком (Player)
-	if body.name == "Player":
+	
+	# Проверяем игнорирование группы
+	if ignore_group != "" and body.is_in_group(ignore_group):
 		return
+	
+	
+	# Наносим урон и вызываем взрыв
 	if body.has_method("apply_damage"):
 		body.apply_damage(10)
 	queue_free()

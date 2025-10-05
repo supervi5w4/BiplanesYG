@@ -28,7 +28,7 @@ extends CharacterBody2D
 # === ВЗРЫВ/РЕСПАУН ===
 @export var explosion_scene: PackedScene = preload("res://scenes/Explosion.tscn")
 @export var spawn_path: NodePath
-@export var respawn_delay: float = 1.0
+@export var respawn_delay: float = 3.0
 @export var invuln_time: float = 0.8
 
 # === GroundKill ===
@@ -37,7 +37,7 @@ extends CharacterBody2D
 
 # === СОСТОЯНИЕ ===
 var speed: float = 0.0
-var hp: int = 100
+var hp: int = 10
 var can_shoot: bool = true
 
 var altitude: float = 0.0
@@ -50,12 +50,20 @@ var invulnerable: bool = false
 @onready var muzzle: Node2D = $Muzzle
 
 func _ready() -> void:
+	# Добавляем в группу игроков
+	add_to_group("player")
+	
 	altitude = start_altitude
 	is_grounded = false
 	speed = max_speed * 0.5  # Стартовая скорость при запуске игры
+	hp = 10  # Инициализируем HP при создании
 
 func _physics_process(delta: float) -> void:
 	if not is_alive:
+		# Дополнительная проверка - отключаем коллайдер если он еще активен
+		var collision_shape = get_node_or_null("CollisionShape2D")
+		if collision_shape and not collision_shape.disabled:
+			collision_shape.disabled = true
 		return
 
 	# 1) Поворот
@@ -138,6 +146,7 @@ func _shoot() -> void:
 	b.rotation = rotation
 	var bullet_vel: Vector2 = Vector2.RIGHT.rotated(rotation) * 900.0 + velocity
 	b.set("velocity", bullet_vel)
+	b.ignore_group = "player"
 	get_tree().current_scene.add_child(b)
 	await get_tree().create_timer(fire_cooldown).timeout
 	can_shoot = true
@@ -145,7 +154,9 @@ func _shoot() -> void:
 func apply_damage(amount: int) -> void:
 	if invulnerable or not is_alive:
 		return
+	print("Player получил урон: ", amount, " HP до: ", hp)
 	hp -= amount
+	print("Player HP после: ", hp)
 	if hp <= 0:
 		explode_on_ground(global_position)
 
@@ -153,6 +164,11 @@ func apply_damage(amount: int) -> void:
 func explode_on_ground(hit_pos: Vector2) -> void:
 	if not is_alive:
 		return
+
+	# СРАЗУ отключаем коллайдер, чтобы мертвый игрок не создавал невидимую стену
+	var collision_shape = get_node_or_null("CollisionShape2D")
+	if collision_shape:
+		collision_shape.disabled = true
 
 	if explosion_scene:
 		var ex: Node2D = explosion_scene.instantiate() as Node2D
@@ -168,6 +184,7 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 	v_alt = 0.0
 	altitude = 0.0
 	is_grounded = true
+	velocity = Vector2.ZERO  # Полностью останавливаем движение
 
 	await get_tree().create_timer(respawn_delay).timeout
 	_respawn()
@@ -177,15 +194,25 @@ func _respawn() -> void:
 	global_position = Vector2(81, 108)
 	altitude = start_altitude
 
-	hp = 100
+	hp = 10
 	speed = max_speed * 0.5  # Стартовая скорость - половина от максимальной
 	v_alt = 0.0
 	is_grounded = false
+	velocity = Vector2.ZERO  # Убеждаемся, что нет остаточной скорости
 
 	visible = true
 	set_physics_process(true)
 	is_alive = true
 	can_shoot = true
+	
+	# Включаем коллайдер обратно
+	var collision_shape = get_node_or_null("CollisionShape2D")
+	if collision_shape:
+		collision_shape.disabled = false
+	
+	# Убеждаемся, что игрок в группе "player"
+	if not is_in_group("player"):
+		add_to_group("player")
 
 	invulnerable = true
 	await get_tree().create_timer(invuln_time).timeout
