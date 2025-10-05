@@ -55,6 +55,10 @@ var invulnerable: bool = false
 func get_is_alive() -> bool:
 	return is_alive
 
+# Геттер для invulnerable для проверки состояния неуязвимости
+func is_invulnerable() -> bool:
+	return invulnerable
+
 @onready var muzzle: Node2D = $Muzzle
 
 func _ready() -> void:
@@ -204,7 +208,10 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 func _respawn() -> void:
 	# Используем точку спавна если она задана
 	print("Player spawn_path: ", spawn_path)
-	print("Player has_node(spawn_path): ", has_node(spawn_path) if spawn_path else "spawn_path is null")
+	if spawn_path:
+		print("Player has_node(spawn_path): ", has_node(spawn_path))
+	else:
+		print("Player has_node(spawn_path): spawn_path is null")
 	
 	if spawn_path and has_node(spawn_path):
 		var spawn_node = get_node(spawn_path)

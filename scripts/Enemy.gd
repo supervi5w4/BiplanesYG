@@ -58,6 +58,13 @@ var shooting_started: bool = false
 
 var target_player: Node2D = null
 
+# Геттеры для проверки состояния
+func get_is_alive() -> bool:
+	return is_alive
+
+func is_invulnerable() -> bool:
+	return invulnerable
+
 @onready var muzzle: Node2D = $Muzzle
 
 func _ready() -> void:
@@ -92,11 +99,11 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# Отладка: проверяем состояние ИИ каждые несколько кадров
-	if int(Time.get_ticks_msec() / 100) % 10 == 0:  # Каждые 1 секунду
+	if int(Time.get_ticks_msec() / 100.0) % 10 == 0:  # Каждые 1 секунду
 		print("Enemy physics: pos=", global_position, " altitude=", altitude, " speed=", speed, " rotation=", rotation)
 
 	# Периодически ищем игрока (каждые 2 секунды)
-	if int(Time.get_ticks_msec() / 2000) % 2 == 0 and target_player == null:
+	if int(Time.get_ticks_msec() / 2000.0) % 2 == 0 and target_player == null:
 		_find_player()
 
 	# === УМНОЕ ДВИЖЕНИЕ К ИГРОКУ ===
@@ -179,7 +186,7 @@ func _process(_dt: float) -> void:
 		var angle_to_player = Vector2.RIGHT.rotated(rotation).angle_to(to_player)
 		
 		# Отладка каждые несколько кадров
-		if int(Time.get_ticks_msec() / 100) % 20 == 0:  # Каждые 2 секунды
+		if int(Time.get_ticks_msec() / 100.0) % 20 == 0:  # Каждые 2 секунды
 			print("Enemy aiming: angle_to_player=", abs(angle_to_player), " threshold=0.14")
 		
 		if abs(angle_to_player) < 0.14:  # Если игрок в прицеле
@@ -190,7 +197,7 @@ func _process(_dt: float) -> void:
 # ==========================
 func _vertical_update(delta: float) -> void:
 	# Отладка каждые несколько кадров
-	if int(Time.get_ticks_msec() / 100) % 10 == 0:  # Каждую секунду
+	if int(Time.get_ticks_msec() / 100.0) % 10 == 0:  # Каждую секунду
 		print("Enemy vertical: altitude=", altitude, " v_alt=", v_alt, " is_grounded=", is_grounded, " speed=", speed)
 	
 	var lift_from_speed: float = _lift_factor_from_speed(speed) * lift_speed_coeff * speed
@@ -236,7 +243,7 @@ func _check_groundkill_collisions() -> void:
 	# Отладка: проверяем расстояние до земли
 	var ground_y: float = 706.0
 	var distance_to_ground: float = ground_y - global_position.y
-	if int(Time.get_ticks_msec() / 100) % 10 == 0:  # Каждую секунду
+	if int(Time.get_ticks_msec() / 100.0) % 10 == 0:  # Каждую секунду
 		print("Enemy ground check: pos_y=", global_position.y, " distance_to_ground=", distance_to_ground, " altitude=", altitude, " is_grounded=", is_grounded)
 	
 	var collision_count = get_slide_collision_count()
@@ -287,7 +294,10 @@ func _wrap_around_screen() -> void:
 # ==========================
 func _shoot() -> void:
 	can_shoot = false
-	print("Enemy shooting at player! Enemy pos: ", global_position, " Player pos: ", target_player.global_position if target_player else "no target")
+	if target_player:
+		print("Enemy shooting at player! Enemy pos: ", global_position, " Player pos: ", target_player.global_position)
+	else:
+		print("Enemy shooting at player! Enemy pos: ", global_position, " Player pos: ", "no target")
 	var scene: PackedScene = preload("res://scenes/Bullet.tscn")
 	var b := scene.instantiate() as Node2D
 	b.global_position = muzzle.global_position
