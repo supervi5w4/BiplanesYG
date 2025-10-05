@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://bu06vul32hsix"]
+[gd_scene load_steps=6 format=3 uid="uid://bu06vul32hsix"]
 
 [ext_resource type="Texture2D" uid="uid://w0o0refxah28" path="res://assets/sprites/bg_sky.png" id="1_d5hba"]
 [ext_resource type="PackedScene" uid="uid://bspxfuppqtatn" path="res://scenes/Player.tscn" id="2_d5hba"]
+[ext_resource type="PackedScene" uid="uid://c35rjej310t4u" path="res://scenes/Enemy.tscn" id="2_enemy"]
 [ext_resource type="Script" uid="uid://dp1vcg7qtvn6d" path="res://scripts/GroundKill.gd" id="3_j68fe"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_d5hba"]
@@ -13,12 +14,15 @@ position = Vector2(647, 353)
 texture = ExtResource("1_d5hba")
 
 [node name="SpawnPlayer" type="Node2D" parent="."]
-position = Vector2(81, 108)
+position = Vector2(48, 469)
 
 [node name="Player" parent="." instance=ExtResource("2_d5hba")]
-position = Vector2(91, 103)
+position = Vector2(52, 474)
 scale = Vector2(1.4466304, 1.5162706)
 spawn_path = NodePath("SpawnPlayer")
+
+[node name="Enemy" parent="." instance=ExtResource("2_enemy")]
+position = Vector2(1203, 457)
 
 [node name="GroundLine" type="Node2D" parent="."]
 position = Vector2(0, 656)

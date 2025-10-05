@@ -4,14 +4,14 @@
 [ext_resource type="Texture2D" uid="uid://ckj7kopjlyghd" path="res://assets/sprites/player_plane.png" id="2_v6fml"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_v6fml"]
-radius = 8.998552
+radius = 5.6943965
 
 [node name="Player" type="CharacterBody2D" groups=["player"]]
 position = Vector2(349, 588)
 script = ExtResource("1_p0vlq")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(-0.15, 0.15)
+scale = Vector2(-0.1, 0.1)
 texture = ExtResource("2_v6fml")
 
 [node name="Muzzle" type="Node2D" parent="."]
