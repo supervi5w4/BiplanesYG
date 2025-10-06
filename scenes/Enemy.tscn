@@ -10,6 +10,7 @@ radius = 9.0
 position = Vector2(1029, 102)
 scale = Vector2(-1, 1)
 script = ExtResource("1_enemy")
+max_lives = 5
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 scale = Vector2(-0.15, 0.15)

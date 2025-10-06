@@ -44,6 +44,10 @@ extends CharacterBody2D
 @export var ground_kill_group: String = "GroundKill"
 @export var ground_kill_name: String = "GroundKill"
 
+# === ЖИЗНИ ===
+@export var max_lives: int = 5
+var lives: int
+
 # === СОСТОЯНИЕ (как у игрока) ===
 var speed: float = 0.0
 var altitude: float = 0.0
@@ -74,6 +78,9 @@ func _ready() -> void:
 	speed = max_speed * 0.6  # Увеличиваем начальную скорость для поддержания высоты
 	hp = 10
 	
+	# Инициализируем жизни
+	lives = max_lives
+	
 	# Устанавливаем правильную начальную позицию
 	var ground_y: float = 706.0  # Y-координата земли (GroundKill)
 	var initial_y: float = ground_y - start_altitude
@@ -83,6 +90,11 @@ func _ready() -> void:
 	var explosion_path = "res://scenes/Explosion.tscn"
 	if ResourceLoader.exists(explosion_path):
 		explosion_scene = load(explosion_path)
+	
+	# Уведомляем HUD о начальном количестве жизней
+	var hud = get_tree().current_scene.get_node_or_null("HUD")
+	if hud:
+		hud.update_enemy_lives(lives)
 	
 	# Ищем игрока при создании
 	_find_player()
@@ -331,6 +343,58 @@ func _explode(hit_pos: Vector2) -> void:
 	
 	print("Enemy _explode called at position: ", hit_pos, " current position: ", global_position)
 	
+	# Уменьшаем жизни
+	lives -= 1
+	
+	# Уведомляем HUD о изменении жизней
+	var hud = get_tree().current_scene.get_node_or_null("HUD")
+	if hud:
+		hud.update_enemy_lives(lives)
+	
+	# Проверяем, не закончились ли жизни
+	if lives <= 0:
+		# Игра окончена - отключаем респавн и вызываем GameState.end_game()
+		respawn_enabled = false
+		GameState.end_game()
+		
+		# Отключаем коллайдер
+		var collision_shape = get_node_or_null("CollisionShape2D")
+		if collision_shape:
+			collision_shape.call_deferred("set_disabled", true)
+
+		# Создаем взрыв
+		if explosion_scene:
+			var ex: Node2D = explosion_scene.instantiate() as Node2D
+			if ex:
+				ex.global_position = hit_pos
+				get_tree().current_scene.add_child(ex)
+
+		# Устанавливаем состояние смерти
+		is_alive = false
+		visible = false
+		set_physics_process(false)
+		can_shoot = false
+		
+		# Останавливаем движение
+		speed = 0.0
+		v_alt = 0.0
+		altitude = 0.0
+		is_grounded = true
+		velocity = Vector2.ZERO
+		
+		# Очищаем цели
+		target_player = null
+		remove_from_group("enemy")
+		
+		print("Enemy defeated, removing from scene")
+		
+		# Удаляем врага без респавна
+		queue_free()
+		return
+	
+	# Если жизни остались, продолжаем с обычной логикой респавна
+	respawn_enabled = true
+	
 	# Отключаем коллайдер
 	var collision_shape = get_node_or_null("CollisionShape2D")
 	if collision_shape:
@@ -362,12 +426,9 @@ func _explode(hit_pos: Vector2) -> void:
 	
 	print("Enemy exploded, respawn in ", respawn_delay, " seconds")
 	
-	# Респавн или удаление
-	if respawn_enabled:
-		await get_tree().create_timer(respawn_delay).timeout
-		_respawn()
-	else:
-		queue_free()
+	# Респавн
+	await get_tree().create_timer(respawn_delay).timeout
+	_respawn()
 
 func _respawn() -> void:
 	# Сразу устанавливаем неуязвимость для защиты от пуль

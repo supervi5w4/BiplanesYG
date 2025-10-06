@@ -9,6 +9,7 @@ radius = 8.075409
 [node name="Player" type="CharacterBody2D" groups=["player"]]
 position = Vector2(349, 588)
 script = ExtResource("1_p0vlq")
+max_lives = 5
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 scale = Vector2(-0.13, 0.13)

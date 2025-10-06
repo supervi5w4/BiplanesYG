@@ -39,6 +39,10 @@ extends CharacterBody2D
 @export var ground_kill_group: String = "GroundKill"
 @export var ground_kill_name: String = "GroundKill"
 
+# === ЖИЗНИ ===
+@export var max_lives: int = 5
+var lives: int
+
 # === СОСТОЯНИЕ ===
 var speed: float = 0.0
 var hp: int = 10
@@ -70,8 +74,16 @@ func _ready() -> void:
 	speed = max_speed * 0.5  # Стартовая скорость при запуске игры
 	hp = 10  # Инициализируем HP при создании
 	
+	# Инициализируем жизни
+	lives = max_lives
+	
 	# Загружаем сцену взрыва
 	explosion_scene = load("res://scenes/Explosion.tscn")
+	
+	# Уведомляем HUD о начальном количестве жизней
+	var hud = get_tree().current_scene.get_node_or_null("HUD")
+	if hud:
+		hud.update_player_lives(lives)
 
 func _physics_process(delta: float) -> void:
 	if not is_alive:
@@ -181,6 +193,45 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 	if not is_alive:
 		return
 
+	# Уменьшаем жизни
+	lives -= 1
+	
+	# Уведомляем HUD о изменении жизней
+	var hud = get_tree().current_scene.get_node_or_null("HUD")
+	if hud:
+		hud.update_player_lives(lives)
+	
+	# Проверяем, не закончились ли жизни
+	if lives <= 0:
+		# Игра окончена - вызываем GameState.end_game()
+		GameState.end_game()
+		
+		# СРАЗУ отключаем коллайдер, чтобы мертвый игрок не создавал невидимую стену
+		var collision_shape = get_node_or_null("CollisionShape2D")
+		if collision_shape:
+			collision_shape.call_deferred("set_disabled", true)
+
+		if explosion_scene:
+			var ex: Node2D = explosion_scene.instantiate() as Node2D
+			ex.global_position = hit_pos
+			get_tree().current_scene.add_child(ex)
+
+		is_alive = false
+		visible = false
+		set_physics_process(false)
+		can_shoot = false
+
+		speed = 0.0
+		v_alt = 0.0
+		altitude = 0.0
+		is_grounded = true
+		velocity = Vector2.ZERO  # Полностью останавливаем движение
+		
+		# Удаляем игрока без респавна
+		queue_free()
+		return
+
+	# Если жизни остались, продолжаем с обычной логикой респавна
 	# СРАЗУ отключаем коллайдер, чтобы мертвый игрок не создавал невидимую стену
 	var collision_shape = get_node_or_null("CollisionShape2D")
 	if collision_shape:
