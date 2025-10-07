@@ -144,6 +144,7 @@ func _physics_process(delta: float) -> void:
 	# === ГРАНИЦЫ И КОЛЛИЗИИ ===
 	_wrap_around_screen()
 	_check_groundkill_collisions()
+	_check_plane_collisions()
 
 func _ai_movement(delta: float) -> void:
 	if target_player == null or not is_instance_valid(target_player):
@@ -343,6 +344,9 @@ func _explode(hit_pos: Vector2) -> void:
 	
 	print("Enemy _explode called at position: ", hit_pos, " current position: ", global_position)
 	
+	# Объявляем переменную для коллайдера
+	var collision_shape = get_node_or_null("CollisionShape2D")
+	
 	# Уменьшаем жизни
 	lives -= 1
 	
@@ -358,7 +362,7 @@ func _explode(hit_pos: Vector2) -> void:
 		GameState.end_game()
 		
 		# Отключаем коллайдер
-		var collision_shape = get_node_or_null("CollisionShape2D")
+		collision_shape = get_node_or_null("CollisionShape2D")
 		if collision_shape:
 			collision_shape.call_deferred("set_disabled", true)
 
@@ -396,7 +400,6 @@ func _explode(hit_pos: Vector2) -> void:
 	respawn_enabled = true
 	
 	# Отключаем коллайдер
-	var collision_shape = get_node_or_null("CollisionShape2D")
 	if collision_shape:
 		collision_shape.call_deferred("set_disabled", true)
 
@@ -541,6 +544,28 @@ func _get_orientation_speed_modifier() -> float:
 	var speed_modifier = 1.0 - (orientation_penalty * orientation_speed_factor * max_orientation_penalty)
 	
 	return clamp(speed_modifier, 1.0 - max_orientation_penalty, 1.0)
+
+func _check_plane_collisions() -> void:
+	# Проверяем столкновения с игроком
+	for i in range(get_slide_collision_count()):
+		var c: KinematicCollision2D = get_slide_collision(i)
+		var col := c.get_collider()
+		if col == null:
+			continue
+		
+		# Проверяем, что это игрок
+		if col is Node and col.is_in_group("player"):
+			var player = col as Node
+			# Проверяем, что игрок жив и не неуязвим
+			if player.has_method("get_is_alive") and player.get_is_alive():
+				if not (player.has_method("is_invulnerable") and player.is_invulnerable()):
+					# Столкновение! Взрываем оба самолета
+					print("Enemy collided with player at position: ", c.get_position())
+					_explode(c.get_position())
+					# Также взрываем игрока
+					if player.has_method("explode_on_ground"):
+						player.explode_on_ground(c.get_position())
+					return
 
 func _start_shooting_delay() -> void:
 	shooting_started = false

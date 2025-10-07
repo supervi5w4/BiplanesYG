@@ -163,6 +163,9 @@ func _physics_process(delta: float) -> void:
 
 	# 6) Проверка столкновений с GroundKill
 	_check_groundkill_collisions()
+	
+	# 7) Проверка столкновений с врагами
+	_check_plane_collisions()
 
 func _process(_dt: float) -> void:
 	if is_alive and Input.is_action_just_pressed("shoot") and can_shoot:
@@ -193,6 +196,9 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 	if not is_alive:
 		return
 
+	# Объявляем переменную для коллайдера
+	var collision_shape = get_node_or_null("CollisionShape2D")
+
 	# Уменьшаем жизни
 	lives -= 1
 	
@@ -207,7 +213,7 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 		GameState.end_game()
 		
 		# СРАЗУ отключаем коллайдер, чтобы мертвый игрок не создавал невидимую стену
-		var collision_shape = get_node_or_null("CollisionShape2D")
+		collision_shape = get_node_or_null("CollisionShape2D")
 		if collision_shape:
 			collision_shape.call_deferred("set_disabled", true)
 
@@ -233,7 +239,6 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 
 	# Если жизни остались, продолжаем с обычной логикой респавна
 	# СРАЗУ отключаем коллайдер, чтобы мертвый игрок не создавал невидимую стену
-	var collision_shape = get_node_or_null("CollisionShape2D")
 	if collision_shape:
 		collision_shape.call_deferred("set_disabled", true)
 
@@ -369,3 +374,25 @@ func _wrap_around_screen() -> void:
 		# Останавливаем вертикальное движение вверх
 		if v_alt > 0:
 			v_alt = 0
+	
+func _check_plane_collisions() -> void:
+	# Проверяем столкновения с врагами
+	for i in range(get_slide_collision_count()):
+		var c: KinematicCollision2D = get_slide_collision(i)
+		var col := c.get_collider()
+		if col == null:
+			continue
+		
+		# Проверяем, что это враг
+		if col is Node and col.is_in_group("enemy"):
+			var enemy = col as Node
+			# Проверяем, что враг жив и не неуязвим
+			if enemy.has_method("get_is_alive") and enemy.get_is_alive():
+				if not (enemy.has_method("is_invulnerable") and enemy.is_invulnerable()):
+					# Столкновение! Взрываем оба самолета
+					print("Player collided with enemy at position: ", c.get_position())
+					explode_on_ground(c.get_position())
+					# Также взрываем врага
+					if enemy.has_method("_explode"):
+						enemy._explode(c.get_position())
+					return
