@@ -28,6 +28,14 @@ extends CharacterBody2D
 @export var liftoff_speed: float = 150.0
 @export var liftoff_lift_margin: float = 25.0
 
+# === СРЫВ ПОТОКА (STALL) ===
+@export var stall_speed_threshold: float = 40.0  # Порог скорости для срыва
+@export var stall_drop_rate: float = 160.0  # Скорость падения при срыве
+@export var stall_turn_rate: float = 2.5  # Скорость разворота носом вниз
+
+# === ПАТРУЛИРОВАНИЕ ===
+@export var idle_patrol_angle: float = PI  # Желаемый курс при патрулировании (PI = 180° = влево)
+
 # === СТРЕЛЬБА ===
 @export var fire_cooldown: float = 0.8
 @export var bullet_speed: float = 820.0
@@ -151,9 +159,16 @@ func _ai_movement(delta: float) -> void:
 		# Если нет цели, ищем игрока
 		_find_player()
 		if target_player == null:
-			# Если все еще нет цели, просто летим вперед с покачиваниями
-			var wiggle := sin(Time.get_ticks_msec() * 0.001) * 0.1
-			rotation += wiggle * delta
+			# Если все еще нет цели, плавно сближаемся с idle_patrol_angle
+			var angle_diff = wrapf(idle_patrol_angle - rotation, -PI, PI)
+			var max_turn_rate = turn_speed * delta
+			var turn_amount = clamp(angle_diff, -max_turn_rate, max_turn_rate)
+			rotation += turn_amount
+			
+			# После достижения курса добавляем небольшое покачивание
+			if abs(angle_diff) < 0.05:  # Если почти достигли целевого угла
+				var wiggle := sin(Time.get_ticks_msec() * 0.001) * 0.02
+				rotation += wiggle * delta
 			return
 	
 	# Проверяем, жив ли игрок
@@ -215,8 +230,30 @@ func _vertical_update(delta: float) -> void:
 	
 	var lift_from_speed: float = _lift_factor_from_speed(speed) * lift_speed_coeff * speed
 	var lift_from_throttle: float = lift_throttle_coeff * 0.5
+	
+	# Масштабируем подъёмную силу от тяги в зависимости от скорости
+	lift_from_throttle *= clamp(speed / stall_speed_threshold, 0.0, 1.0)
+	
 	var lift_total: float = lift_from_speed + lift_from_throttle
 	var down: float = gravity_alt
+	
+	# === СРЫВ ПОТОКА (STALL) - применяем ДО расчёта v_alt ===
+	var is_stalling: bool = not is_grounded and speed <= stall_speed_threshold
+	if is_stalling:
+		# При срыве отключаем подъёмную силу полностью
+		lift_total = 0.0
+		# Увеличиваем гравитацию при срыве
+		if speed <= 0.1:  # Практически нулевая скорость
+			# Мгновенно направляем носом вниз
+			rotation = lerp_angle(rotation, PI / 2.0, stall_turn_rate * delta * 3.0)
+			# Усиленная гравитация для быстрого падения
+			down = gravity_alt * 2.5
+		else:
+			# Обычный срыв при низкой скорости
+			rotation = lerp_angle(rotation, PI / 2.0, stall_turn_rate * delta)
+			# Увеличенная гравитация
+			down = gravity_alt * 1.8
+	
 	var a_alt: float = lift_total - down
 
 	if not is_grounded:
