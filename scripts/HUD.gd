@@ -21,9 +21,6 @@ var enemy_lives: int = 0
 # Флаг для предотвращения множественных срабатываний
 var game_ended: bool = false
 
-# Таймер для задержки перед переходом в меню
-var end_timer: SceneTreeTimer
-
 # Ссылка на экран завершения игры
 var end_screen_scene: PackedScene = preload("res://scenes/EndScreen.tscn")
 var end_screen_instance: CanvasLayer = null
@@ -81,56 +78,32 @@ func update_player_lives(new_lives: int):
 	"""Обновляет количество жизней игрока"""
 	player_lives = clamp(new_lives, 0, max_lives)
 	_update_hearts()
-	
-	# Проверяем, не закончилась ли игра
-	if player_lives <= 0 and not game_ended:
-		_trigger_game_end("Поражение")
 
 func update_enemy_lives(new_lives: int):
 	"""Обновляет количество жизней врага"""
 	enemy_lives = clamp(new_lives, 0, max_lives)
 	_update_hearts()
-	
-	# Проверяем, не закончилась ли игра
-	if enemy_lives <= 0 and not game_ended:
-		_trigger_game_end("Победа")
 
 func _on_game_ended(result: String, stats: Dictionary):
 	"""
 	Обработчик сигнала GameState.game_ended
-	Вызывается автоматически при завершении игры
+	Вызывается автоматически при завершении игры через сигнал
+	
+	Параметры:
+	- result: результат игры ("Победа", "Поражение")
+	- stats: словарь со статистикой из GameState
 	"""
 	if game_ended:
 		return
 	
 	game_ended = true
 	
-	# Дополняем статистику текущими значениями жизней
+	# Дополняем статистику текущими значениями жизней из HUD
 	stats["player_lives"] = player_lives
 	stats["enemy_lives"] = enemy_lives
 	
-	# Показываем экран завершения
+	# Показываем экран завершения с полной статистикой
 	show_end_screen(result, stats)
-
-func _trigger_game_end(result_text: String):
-	"""
-	Запускает процесс завершения игры (устаревший метод)
-	Теперь используется сигнал GameState.game_ended
-	"""
-	if game_ended:
-		return
-	
-	game_ended = true
-	
-	# Собираем статистику для экрана завершения
-	var stats = {
-		"player_lives": player_lives,
-		"enemy_lives": enemy_lives,
-		"score": GameState.score
-	}
-	
-	# Показываем экран завершения
-	show_end_screen(result_text, stats)
 
 func show_end_screen(result: String, stats: Dictionary):
 	"""
@@ -170,20 +143,19 @@ func _show_hud_animated():
 
 func show_result(text: String):
 	"""
-	Устаревший метод показа результата (для обратной совместимости)
-	Используйте show_end_screen() вместо этого
+	Fallback метод показа результата (используется только если EndScreen не работает)
+	В нормальных условиях используется show_end_screen()
 	"""
 	game_status_label.text = text
 	game_status_label.visible = true
+	game_ended = true
 	
-	# Если это внешний вызов, также запускаем таймер
-	if not game_ended:
-		game_ended = true
-		end_timer = get_tree().create_timer(5.0)
-		end_timer.timeout.connect(_return_to_menu)
+	# Простой таймер для возврата в меню
+	var timer = get_tree().create_timer(5.0)
+	timer.timeout.connect(_return_to_menu)
 
 func _return_to_menu():
-	"""Переходит в главное меню"""
+	"""Возвращает игрока в главное меню"""
 	get_tree().change_scene_to_file("res://scenes/start_menu.tscn")
 
 func hide_result():
@@ -207,17 +179,9 @@ func reset_game():
 			end_screen_instance.hide_screen()
 		else:
 			end_screen_instance.visible = false
-	
-	# Отменяем активный таймер, если он есть
-	if end_timer and end_timer.time_left > 0:
-		end_timer.time_left = 0
 
 func _exit_tree():
 	"""Очистка при удалении узла"""
-	# Отменяем активный таймер
-	if end_timer and end_timer.time_left > 0:
-		end_timer.time_left = 0
-	
 	# Удаляем экземпляр EndScreen
 	if end_screen_instance and is_instance_valid(end_screen_instance):
 		end_screen_instance.queue_free()
