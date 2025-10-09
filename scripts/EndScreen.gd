@@ -12,6 +12,7 @@ extends CanvasLayer
 @onready var restart_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonsContainer/RestartButton
 @onready var menu_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonsContainer/MenuButton
 @onready var share_button: Button = $Panel/MarginContainer/VBoxContainer/ButtonsContainer/ShareButton
+@onready var animation_player: AnimationPlayer = $AnimationPlayer
 # AudioPlayer опционален, может быть использован для звуков в будущем
 @onready var audio_player: AudioStreamPlayer = $AudioPlayer if has_node("AudioPlayer") else null
 
@@ -83,8 +84,12 @@ func show_screen(result: String, stats: Dictionary):
 	else:
 		time_value.text = "%dс" % seconds
 	
-	# Запускаем анимацию появления через Tween
-	_animate_show_with_tween()
+	# Запускаем анимацию появления
+	if animation_player and animation_player.has_animation("fade_in"):
+		animation_player.play("fade_in")
+	else:
+		# Fallback: используем Tween для анимации
+		_animate_show_with_tween()
 	
 	# Воспроизводим звук (если назначен)
 	if audio_player and audio_player.stream:
@@ -111,8 +116,13 @@ func _animate_hide_with_tween():
 
 func hide_screen():
 	"""Скрывает экран с анимацией"""
-	# Используем Tween для анимации
-	await _animate_hide_with_tween()
+	if animation_player and animation_player.has_animation("fade_out"):
+		animation_player.play("fade_out")
+		await animation_player.animation_finished
+	else:
+		# Fallback: используем Tween для анимации
+		await _animate_hide_with_tween()
+	
 	visible = false
 
 func _on_restart_pressed():
