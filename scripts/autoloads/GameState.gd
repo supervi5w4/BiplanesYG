@@ -1,5 +1,6 @@
 extends Node
 signal save_updated(data: Dictionary)
+signal game_ended(result: String, stats: Dictionary)
 
 var current_level: int = 1
 var score: int = 0
@@ -7,14 +8,55 @@ var state: String = "idle"
 var highest_unlocked_level: int = 1
 const SAVE_KEY := "save"
 
+# === СТАТИСТИКА ИГРЫ ===
+var kills: int = 0
+var shots_fired: int = 0
+var shots_hit: int = 0
+var start_time: int = 0
+var end_time: int = 0
+
 func start_game(level: int) -> void:
 	current_level = level
 	score = 0
 	state = "playing"
+	
+	# Обнуляем статистику
+	kills = 0
+	shots_fired = 0
+	shots_hit = 0
+	start_time = Time.get_ticks_msec()
+	end_time = 0
+	
 	_persist()
 
-func end_game() -> void:
+func end_game(result: String = "") -> void:
 	state = "idle"
+	
+	# Фиксируем время завершения
+	end_time = Time.get_ticks_msec()
+	
+	# Вычисляем статистику
+	var duration_ms: int = end_time - start_time
+	var duration_sec: float = duration_ms / 1000.0
+	var accuracy: float = 0.0
+	if shots_fired > 0:
+		accuracy = (float(shots_hit) / float(shots_fired)) * 100.0
+	
+	# Формируем словарь статистики
+	var stats: Dictionary = {
+		"player_lives": 0,  # Будет установлено HUD'ом
+		"enemy_lives": 0,   # Будет установлено HUD'ом
+		"score": score,
+		"kills": kills,
+		"shots_fired": shots_fired,
+		"shots_hit": shots_hit,
+		"accuracy": accuracy,
+		"duration_sec": duration_sec
+	}
+	
+	# Отправляем сигнал о завершении игры
+	emit_signal("game_ended", result, stats)
+	
 	_persist()
 
 func has_game_in_progress() -> bool:
@@ -30,7 +72,53 @@ func reset_for_level(level: int) -> void:
 	current_level = level
 	score = 0
 	state = "ready"
+	
+	# Обнуляем статистику
+	kills = 0
+	shots_fired = 0
+	shots_hit = 0
+	start_time = 0
+	end_time = 0
+	
 	_persist()
+
+# === МЕТОДЫ ДЛЯ ОБНОВЛЕНИЯ СТАТИСТИКИ ===
+
+func add_score(points: int) -> void:
+	"""Добавляет очки к общему счету"""
+	score += points
+	_persist()
+
+func add_kill() -> void:
+	"""Увеличивает счетчик убийств"""
+	kills += 1
+	# За каждое убийство начисляем очки
+	add_score(100)
+
+func add_shot(fired: bool = true, hit: bool = false) -> void:
+	"""
+	Регистрирует выстрел
+	
+	Параметры:
+	- fired: если true, увеличивает счетчик выстрелов
+	- hit: если true, увеличивает счетчик попаданий
+	"""
+	if fired:
+		shots_fired += 1
+	if hit:
+		shots_hit += 1
+
+func register_hit(_target: Node = null) -> void:
+	"""
+	Регистрирует попадание по цели
+	
+	Параметры:
+	- _target: узел, по которому попали (опционально, зарезервировано для будущего использования)
+	"""
+	shots_hit += 1
+	
+	# Дополнительные очки за попадание
+	add_score(10)
 
 func apply_cloud_save(data: Dictionary) -> void:
 	if data.has(SAVE_KEY) and typeof(data[SAVE_KEY]) == TYPE_DICTIONARY:

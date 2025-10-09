@@ -207,6 +207,13 @@ func _shoot() -> void:
 	var bullet_vel: Vector2 = Vector2.RIGHT.rotated(rotation) * 900.0 + velocity
 	b.set("velocity", bullet_vel)
 	b.ignore_group = "player"
+	
+	# Регистрируем выстрел в GameState
+	GameState.add_shot(true, false)
+	
+	# Помечаем пулю как выпущенную игроком для отслеживания попаданий
+	b.set("fired_by_player", true)
+	
 	get_tree().current_scene.add_child(b)
 	await get_tree().create_timer(fire_cooldown).timeout
 	can_shoot = true
@@ -236,8 +243,8 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 	
 	# Проверяем, не закончились ли жизни
 	if lives <= 0:
-		# Игра окончена - вызываем GameState.end_game()
-		GameState.end_game()
+		# Игра окончена - вызываем GameState.end_game() с результатом "Поражение"
+		GameState.end_game("Поражение")
 		
 		# СРАЗУ отключаем коллайдер, чтобы мертвый игрок не создавал невидимую стену
 		collision_shape = get_node_or_null("CollisionShape2D")

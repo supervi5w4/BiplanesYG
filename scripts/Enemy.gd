@@ -317,7 +317,7 @@ func _check_groundkill_collisions() -> void:
 				print("Enemy hit GroundKill by name: ", ground_kill_name, " at position: ", c.get_position())
 		if hit_kill:
 			print("Enemy exploding due to GroundKill collision at position: ", c.get_position())
-			_explode(c.get_position())
+			_explode(c.get_position(), false)  # Не убит игроком - столкновение с землей
 			return
 
 func _wrap_around_screen() -> void:
@@ -361,7 +361,7 @@ func _shoot() -> void:
 	await get_tree().create_timer(fire_cooldown).timeout
 	can_shoot = true
 
-func apply_damage(amount: int) -> void:
+func apply_damage(amount: int, from_player: bool = true) -> void:
 	print("Enemy apply_damage called with amount: ", amount, " is_alive: ", is_alive, " invulnerable: ", invulnerable)
 	if not is_alive or invulnerable:
 		print("Enemy damage blocked - not alive or invulnerable")
@@ -373,13 +373,18 @@ func apply_damage(amount: int) -> void:
 	
 	if hp <= 0:
 		print("Enemy exploding due to HP <= 0")
-		_explode(global_position)
+		_explode(global_position, from_player)
 
-func _explode(hit_pos: Vector2) -> void:
+func _explode(hit_pos: Vector2, killed_by_player: bool = true) -> void:
 	if not is_alive:
 		return
 	
 	print("Enemy _explode called at position: ", hit_pos, " current position: ", global_position)
+	
+	# Регистрируем убийство, если враг был убит игроком
+	if killed_by_player:
+		GameState.add_kill()
+		print("Player killed enemy! Total kills: ", GameState.kills, " Score: ", GameState.score)
 	
 	# Объявляем переменную для коллайдера
 	var collision_shape = get_node_or_null("CollisionShape2D")
@@ -394,9 +399,9 @@ func _explode(hit_pos: Vector2) -> void:
 	
 	# Проверяем, не закончились ли жизни
 	if lives <= 0:
-		# Игра окончена - отключаем респавн и вызываем GameState.end_game()
+		# Игра окончена - отключаем респавн и вызываем GameState.end_game() с результатом "Победа"
 		respawn_enabled = false
-		GameState.end_game()
+		GameState.end_game("Победа")
 		
 		# Отключаем коллайдер
 		collision_shape = get_node_or_null("CollisionShape2D")
@@ -598,7 +603,7 @@ func _check_plane_collisions() -> void:
 				if not (player.has_method("is_invulnerable") and player.is_invulnerable()):
 					# Столкновение! Взрываем оба самолета
 					print("Enemy collided with player at position: ", c.get_position())
-					_explode(c.get_position())
+					_explode(c.get_position(), false)  # Столкновение, а не убийство игроком
 					# Также взрываем игрока
 					if player.has_method("explode_on_ground"):
 						player.explode_on_ground(c.get_position())

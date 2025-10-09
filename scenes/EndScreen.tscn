@@ -1,0 +1,233 @@
+[gd_scene load_steps=3 format=3 uid="uid://bqjr8ygwx7hn5"]
+
+[ext_resource type="Script" path="res://scripts/EndScreen.gd" id="1_h3xv2"]
+
+[sub_resource type="Animation" id="Animation_fade_in"]
+resource_name = "fade_in"
+length = 0.5
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Panel:modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.5),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 0), Color(1, 1, 1, 1)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Panel:scale")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.5),
+"transitions": PackedFloat32Array(2, 1),
+"update": 0,
+"values": [Vector2(0.8, 0.8), Vector2(1, 1)]
+}
+
+[node name="EndScreen" type="CanvasLayer"]
+layer = 100
+script = ExtResource("1_h3xv2")
+
+[node name="Panel" type="Panel" parent="."]
+modulate = Color(1, 1, 1, 0)
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -250.0
+offset_right = 300.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 30
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Победа!"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="StatsContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+size_flags_vertical = 3
+
+[node name="PlayerLivesRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Icon" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/PlayerLivesRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "❤"
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/PlayerLivesRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "Ваши жизни:"
+
+[node name="Value" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/PlayerLivesRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "0"
+
+[node name="EnemyLivesRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Icon" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/EnemyLivesRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "💀"
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/EnemyLivesRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "Жизни врага:"
+
+[node name="Value" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/EnemyLivesRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "0"
+
+[node name="ScoreRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Icon" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/ScoreRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "⭐"
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/ScoreRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "Счет:"
+
+[node name="Value" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/ScoreRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "0"
+
+[node name="KillsRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Icon" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/KillsRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "🎯"
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/KillsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "Сбито:"
+
+[node name="Value" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/KillsRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "0"
+
+[node name="AccuracyRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Icon" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/AccuracyRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "🎲"
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/AccuracyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "Точность:"
+
+[node name="Value" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/AccuracyRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "0%"
+
+[node name="TimeRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/StatsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Icon" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/TimeRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "⏱"
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/TimeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "Время:"
+
+[node name="Value" type="Label" parent="Panel/MarginContainer/VBoxContainer/StatsContainer/TimeRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "0с"
+
+[node name="HSeparator2" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ButtonsContainer" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="RestartButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonsContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Переиграть"
+
+[node name="MenuButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonsContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Меню"
+
+[node name="ShareButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ButtonsContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Поделиться"
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+"": SubResource("Animation_fade_in")
+}
+
+[node name="AudioPlayer" type="AudioStreamPlayer" parent="."]
+

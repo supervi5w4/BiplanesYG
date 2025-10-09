@@ -2,6 +2,7 @@ extends Area2D
 @export var speed := 800.0
 @export var ignore_group: String = ""
 var velocity: Vector2 = Vector2.ZERO
+var fired_by_player: bool = false  # Флаг для отслеживания, кто выпустил пулю
 
 func _ready() -> void:
 	monitoring = true
@@ -27,6 +28,13 @@ func _on_Bullet_body_entered(body: Node) -> void:
 		return
 	
 	print("Bullet hit: ", body.name, " at position: ", global_position)
+	
+	# Регистрируем попадание, если пуля выпущена игроком
+	if fired_by_player:
+		# Проверяем, что попали во врага
+		if body.is_in_group("enemy"):
+			GameState.register_hit(body)
+			print("Player bullet hit enemy! Total hits: ", GameState.shots_hit)
 	
 	# Наносим урон и вызываем взрыв
 	if body.has_method("apply_damage"):
