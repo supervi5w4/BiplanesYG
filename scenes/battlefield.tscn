@@ -1,6 +1,6 @@
 [gd_scene load_steps=10 format=3 uid="uid://bu06vul32hsix"]
 
-[ext_resource type="Script" uid="uid://bwm9k4p8xvfrt" path="res://scripts/Battlefield.gd" id="1_battlefield"]
+[ext_resource type="Script" uid="uid://bwnak4p8xvfrt" path="res://scripts/Battlefield.gd" id="1_battlefield"]
 [ext_resource type="Texture2D" uid="uid://w0o0refxah28" path="res://assets/sprites/bg_sky.png" id="1_d5hba"]
 [ext_resource type="PackedScene" uid="uid://bspxfuppqtatn" path="res://scenes/Player.tscn" id="2_d5hba"]
 [ext_resource type="PackedScene" uid="uid://c35rjej310t4u" path="res://scenes/Enemy.tscn" id="2_enemy"]

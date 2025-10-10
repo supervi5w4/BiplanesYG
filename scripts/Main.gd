@@ -3,18 +3,23 @@ extends Node
 @export var player_scene: PackedScene = preload("res://scenes/Player.tscn")
 @export var enemy_scene: PackedScene = preload("res://scenes/Enemy.tscn")
 @export var life_pickup_scene: PackedScene = preload("res://scenes/LifePickup.tscn")
+@export var shield_pickup_scene: PackedScene = preload("res://scenes/ShieldPickup.tscn")
 @export var life_pickup_spawn_interval_min: float = 5.0  # Минимальный интервал появления плюшек
 @export var life_pickup_spawn_interval_max: float = 10.0  # Максимальный интервал появления плюшек
+@export var shield_pickup_spawn_interval_min: float = 5.0  # Минимальный интервал появления щита
+@export var shield_pickup_spawn_interval_max: float = 10.0  # Максимальный интервал появления щита
 @onready var spawn_player: Node2D = $SpawnPlayer if has_node("SpawnPlayer") else null
 @onready var spawn_enemy: Node2D = $SpawnEnemy if has_node("SpawnEnemy") else null
 
 var life_pickup_timer: Timer
+var shield_pickup_timer: Timer
 
 func _ready() -> void:
 	_init_world()
 	_spawn_player()
 	_spawn_enemy()
 	_setup_life_pickup_timer()
+	_setup_shield_pickup_timer()
 
 func _init_world() -> void:
 	# здесь же можно подготовить фон, коллайдеры границ и т.п.
@@ -83,3 +88,44 @@ func _spawn_life_pickup() -> void:
 	
 	# Запускаем таймер для следующего спавна
 	_start_next_spawn_timer()
+
+func _setup_shield_pickup_timer() -> void:
+	"""Настраивает таймер для периодического появления пикапов щита"""
+	shield_pickup_timer = Timer.new()
+	shield_pickup_timer.one_shot = true  # Таймер срабатывает один раз
+	shield_pickup_timer.timeout.connect(_spawn_shield_pickup)
+	add_child(shield_pickup_timer)
+	
+	# Запускаем таймер с случайным интервалом
+	_start_next_shield_spawn_timer()
+
+func _start_next_shield_spawn_timer() -> void:
+	"""Запускает таймер щита со случайным интервалом"""
+	var interval = randf_range(shield_pickup_spawn_interval_min, shield_pickup_spawn_interval_max)
+	shield_pickup_timer.wait_time = interval
+	shield_pickup_timer.start()
+
+func _spawn_shield_pickup() -> void:
+	"""Создает пикап щита в случайной позиции на экране"""
+	if not shield_pickup_scene:
+		_start_next_shield_spawn_timer()  # Пробуем снова через случайный интервал
+		return
+	
+	var pickup = shield_pickup_scene.instantiate()
+	
+	# Получаем размеры видимой области экрана
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	
+	# Генерируем случайную позицию в безопасной зоне экрана
+	var margin_x: float = 50.0
+	var margin_y_top: float = 50.0
+	var margin_y_bottom: float = 100.0
+	
+	var spawn_x: float = randf_range(margin_x, viewport_size.x - margin_x)
+	var spawn_y: float = randf_range(margin_y_top, viewport_size.y - margin_y_bottom)
+	
+	pickup.global_position = Vector2(spawn_x, spawn_y)
+	add_child(pickup)
+	
+	# Запускаем таймер для следующего спавна
+	_start_next_shield_spawn_timer()

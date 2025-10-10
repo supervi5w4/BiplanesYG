@@ -70,6 +70,9 @@ var shooting_started: bool = false
 
 var target_player: Node2D = null
 var target_life_pickup: Node2D = null  # Целевое сердечко для подбора
+var target_shield_pickup: Node2D = null  # Целевой щит для подбора
+
+@export var shield_pickup_chance: float = 0.5  # 50% шанс подобрать щит
 
 # Геттеры для проверки состояния
 func get_is_alive() -> bool:
@@ -154,12 +157,24 @@ func _ai_movement(delta: float) -> void:
 	# Ищем ближайшее сердечко если нужно
 	_find_nearest_life_pickup()
 	
-	# Решаем, куда лететь: к игроку или к сердечку
+	# Ищем ближайший щит
+	_find_nearest_shield_pickup()
+	
+	# Решаем, куда лететь: к игроку, к сердечку или к щиту
 	var target_position: Vector2
 	var is_chasing_pickup = false
 	
-	# Если у врага не хватает жизней и есть сердечко, летим за ним с вероятностью 70%
-	if lives < max_lives and target_life_pickup != null and is_instance_valid(target_life_pickup):
+	# Приоритет 1: Щит (если он есть и нам повезло)
+	if target_shield_pickup != null and is_instance_valid(target_shield_pickup):
+		var distance_to_shield = global_position.distance_to(target_shield_pickup.global_position)
+		# Если щит близко, летим за ним с заданной вероятностью
+		if distance_to_shield < 500.0:
+			if randf() < shield_pickup_chance:
+				target_position = target_shield_pickup.global_position
+				is_chasing_pickup = true
+	
+	# Приоритет 2: Сердечко (если у врага не хватает жизней)
+	if not is_chasing_pickup and lives < max_lives and target_life_pickup != null and is_instance_valid(target_life_pickup):
 		var distance_to_pickup = global_position.distance_to(target_life_pickup.global_position)
 		# Если сердечко близко или у нас мало жизней, летим за ним
 		if distance_to_pickup < 400.0 or lives <= 2:
@@ -168,7 +183,7 @@ func _ai_movement(delta: float) -> void:
 				target_position = target_life_pickup.global_position
 				is_chasing_pickup = true
 	
-	# Если не летим за сердечком, атакуем игрока
+	# Если не летим за пикапами, атакуем игрока
 	if not is_chasing_pickup:
 		if target_player == null or not is_instance_valid(target_player):
 			# Если нет цели, ищем игрока
@@ -575,6 +590,44 @@ func _find_nearest_life_pickup() -> void:
 	
 	target_life_pickup = closest_pickup
 
+func _find_nearest_shield_pickup() -> void:
+	"""Ищет ближайший щит на карте"""
+	# Сбрасываем старую цель если она уже недействительна
+	if target_shield_pickup != null and not is_instance_valid(target_shield_pickup):
+		target_shield_pickup = null
+	
+	# Если уже есть валидная цель, продолжаем её преследовать
+	if target_shield_pickup != null:
+		return
+	
+	# Ищем все щиты на сцене
+	var scene = get_tree().current_scene
+	if not scene:
+		return
+	
+	var pickups = []
+	for child in scene.get_children():
+		if child.is_in_group("shield_pickup") or child.name.contains("ShieldPickup"):
+			pickups.append(child)
+	
+	# Если щитов нет, выходим
+	if pickups.is_empty():
+		target_shield_pickup = null
+		return
+	
+	# Находим ближайший щит
+	var closest_pickup = null
+	var closest_distance = INF
+	
+	for pickup in pickups:
+		if is_instance_valid(pickup):
+			var distance = global_position.distance_to(pickup.global_position)
+			if distance < closest_distance:
+				closest_distance = distance
+				closest_pickup = pickup
+	
+	target_shield_pickup = closest_pickup
+
 func add_life(amount: int = 1) -> void:
 	"""Добавляет жизни врагу (не превышает max_lives)"""
 	lives = clamp(lives + amount, 0, max_lives)
@@ -620,12 +673,30 @@ func _check_plane_collisions() -> void:
 		# Проверяем, что это игрок
 		if col is Node and col.is_in_group("player"):
 			var player = col as Node
-			# Проверяем, что игрок жив и не неуязвим
+			# Проверяем, что игрок жив
 			if player.has_method("get_is_alive") and player.get_is_alive():
-				if not (player.has_method("is_invulnerable") and player.is_invulnerable()):
-					# Столкновение! Взрываем оба самолета
-					_explode(c.get_position(), false)  # Столкновение, а не убийство игроком
-					# Также взрываем игрока
+				# Проверяем щиты обоих самолётов
+				var enemy_has_shield = invulnerable
+				var player_has_shield = player.has_method("is_invulnerable") and player.is_invulnerable()
+				
+				# Если у обоих есть щит - никто не взрывается
+				if enemy_has_shield and player_has_shield:
+					return
+				
+				# Если только у врага есть щит - взрывается только игрок
+				if enemy_has_shield and not player_has_shield:
+					if player.has_method("explode_on_ground"):
+						player.explode_on_ground(c.get_position())
+					return
+				
+				# Если только у игрока есть щит - взрывается только враг
+				if not enemy_has_shield and player_has_shield:
+					_explode(c.get_position(), false)  # Столкновение, не убийство игроком
+					return
+				
+				# Если у обоих нет щита - взрываются оба
+				if not enemy_has_shield and not player_has_shield:
+					_explode(c.get_position(), false)  # Столкновение, не убийство игроком
 					if player.has_method("explode_on_ground"):
 						player.explode_on_ground(c.get_position())
 					return
@@ -634,3 +705,39 @@ func _start_shooting_delay() -> void:
 	shooting_started = false
 	await get_tree().create_timer(shooting_delay).timeout
 	shooting_started = true
+
+# === МЕТОДЫ ЩИТА ===
+func activate_shield(duration: float) -> void:
+	"""Активирует щит на заданное время"""
+	invulnerable = true
+	_set_shield_visuals(true)
+	
+	# За 1 секунду до конца начинаем мигать
+	var blink_start = duration - 1.0
+	if blink_start > 0:
+		await get_tree().create_timer(blink_start).timeout
+		_blink_before_end()
+		await get_tree().create_timer(1.0).timeout
+	else:
+		await get_tree().create_timer(duration).timeout
+	
+	invulnerable = false
+	_set_shield_visuals(false)
+
+func _set_shield_visuals(active: bool) -> void:
+	"""Включает/выключает визуал щита"""
+	var aura = get_node_or_null("ShieldAura")
+	if aura:
+		aura.visible = active
+
+func _blink_before_end() -> void:
+	"""Мигание щита перед окончанием"""
+	var aura = get_node_or_null("ShieldAura")
+	if not aura:
+		return
+	
+	for i in range(5):
+		aura.visible = false
+		await get_tree().create_timer(0.1).timeout
+		aura.visible = true
+		await get_tree().create_timer(0.1).timeout

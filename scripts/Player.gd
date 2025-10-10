@@ -419,12 +419,66 @@ func _check_plane_collisions() -> void:
 		# Проверяем, что это враг
 		if col is Node and col.is_in_group("enemy"):
 			var enemy = col as Node
-			# Проверяем, что враг жив и не неуязвим
+			# Проверяем, что враг жив
 			if enemy.has_method("get_is_alive") and enemy.get_is_alive():
-				if not (enemy.has_method("is_invulnerable") and enemy.is_invulnerable()):
-					# Столкновение! Взрываем оба самолета
-					explode_on_ground(c.get_position())
-					# Также взрываем врага
-					if enemy.has_method("_explode"):
-						enemy._explode(c.get_position())
+				# Проверяем щиты обоих самолётов
+				var player_has_shield = invulnerable
+				var enemy_has_shield = enemy.has_method("is_invulnerable") and enemy.is_invulnerable()
+				
+				# Если у обоих есть щит - никто не взрывается
+				if player_has_shield and enemy_has_shield:
 					return
+				
+				# Если только у игрока есть щит - взрывается только враг
+				if player_has_shield and not enemy_has_shield:
+					if enemy.has_method("_explode"):
+						enemy._explode(c.get_position(), false)  # Столкновение, не убийство игроком
+					return
+				
+				# Если только у врага есть щит - взрывается только игрок
+				if not player_has_shield and enemy_has_shield:
+					explode_on_ground(c.get_position())
+					return
+				
+				# Если у обоих нет щита - взрываются оба
+				if not player_has_shield and not enemy_has_shield:
+					explode_on_ground(c.get_position())
+					if enemy.has_method("_explode"):
+						enemy._explode(c.get_position(), false)  # Столкновение, не убийство игроком
+					return
+
+# === МЕТОДЫ ЩИТА ===
+func activate_shield(duration: float) -> void:
+	"""Активирует щит на заданное время"""
+	invulnerable = true
+	_set_shield_visuals(true)
+	
+	# За 1 секунду до конца начинаем мигать
+	var blink_start = duration - 1.0
+	if blink_start > 0:
+		await get_tree().create_timer(blink_start).timeout
+		_blink_before_end()
+		await get_tree().create_timer(1.0).timeout
+	else:
+		await get_tree().create_timer(duration).timeout
+	
+	invulnerable = false
+	_set_shield_visuals(false)
+
+func _set_shield_visuals(active: bool) -> void:
+	"""Включает/выключает визуал щита"""
+	var aura = get_node_or_null("ShieldAura")
+	if aura:
+		aura.visible = active
+
+func _blink_before_end() -> void:
+	"""Мигание щита перед окончанием"""
+	var aura = get_node_or_null("ShieldAura")
+	if not aura:
+		return
+	
+	for i in range(5):
+		aura.visible = false
+		await get_tree().create_timer(0.1).timeout
+		aura.visible = true
+		await get_tree().create_timer(0.1).timeout
