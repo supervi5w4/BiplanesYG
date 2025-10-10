@@ -27,14 +27,12 @@ func _on_Bullet_body_entered(body: Node) -> void:
 	if ignore_group != "" and body.is_in_group(ignore_group):
 		return
 	
-	print("Bullet hit: ", body.name, " at position: ", global_position)
 	
 	# Регистрируем попадание, если пуля выпущена игроком
 	if fired_by_player:
 		# Проверяем, что попали во врага
 		if body.is_in_group("enemy"):
 			GameState.register_hit(body)
-			print("Player bullet hit enemy! Total hits: ", GameState.shots_hit)
 	
 	# Наносим урон и вызываем взрыв
 	if body.has_method("apply_damage"):

@@ -69,6 +69,7 @@ var invulnerable: bool = false
 var shooting_started: bool = false
 
 var target_player: Node2D = null
+var target_life_pickup: Node2D = null  # Целевое сердечко для подбора
 
 # Геттеры для проверки состояния
 func get_is_alive() -> bool:
@@ -111,16 +112,11 @@ func _ready() -> void:
 	_start_shooting_delay()
 
 func _physics_process(delta: float) -> void:
-	print("Enemy _physics_process called, is_alive: ", is_alive)
 	if not is_alive:
 		var collision_shape = get_node_or_null("CollisionShape2D")
 		if collision_shape and not collision_shape.disabled:
 			collision_shape.call_deferred("set_disabled", true)
 		return
-
-	# Отладка: проверяем состояние ИИ каждые несколько кадров
-	if int(Time.get_ticks_msec() / 100.0) % 10 == 0:  # Каждые 1 секунду
-		print("Enemy physics: pos=", global_position, " altitude=", altitude, " speed=", speed, " rotation=", rotation)
 
 	# Периодически ищем игрока (каждые 2 секунды)
 	if int(Time.get_ticks_msec() / 2000.0) % 2 == 0 and target_player == null:
@@ -155,35 +151,59 @@ func _physics_process(delta: float) -> void:
 	_check_plane_collisions()
 
 func _ai_movement(delta: float) -> void:
-	if target_player == null or not is_instance_valid(target_player):
-		# Если нет цели, ищем игрока
-		_find_player()
-		if target_player == null:
-			# Если все еще нет цели, плавно сближаемся с idle_patrol_angle
-			var angle_diff = wrapf(idle_patrol_angle - rotation, -PI, PI)
-			var max_turn_rate = turn_speed * delta
-			var turn_amount = clamp(angle_diff, -max_turn_rate, max_turn_rate)
-			rotation += turn_amount
-			
-			# После достижения курса добавляем небольшое покачивание
-			if abs(angle_diff) < 0.05:  # Если почти достигли целевого угла
-				var wiggle := sin(Time.get_ticks_msec() * 0.001) * 0.02
-				rotation += wiggle * delta
+	# Ищем ближайшее сердечко если нужно
+	_find_nearest_life_pickup()
+	
+	# Решаем, куда лететь: к игроку или к сердечку
+	var target_position: Vector2
+	var is_chasing_pickup = false
+	
+	# Если у врага не хватает жизней и есть сердечко, летим за ним с вероятностью 70%
+	if lives < max_lives and target_life_pickup != null and is_instance_valid(target_life_pickup):
+		var distance_to_pickup = global_position.distance_to(target_life_pickup.global_position)
+		# Если сердечко близко или у нас мало жизней, летим за ним
+		if distance_to_pickup < 400.0 or lives <= 2:
+			# С вероятностью 70% выбираем сердечко
+			if randf() < 0.7:
+				target_position = target_life_pickup.global_position
+				is_chasing_pickup = true
+	
+	# Если не летим за сердечком, атакуем игрока
+	if not is_chasing_pickup:
+		if target_player == null or not is_instance_valid(target_player):
+			# Если нет цели, ищем игрока
+			_find_player()
+			if target_player == null:
+				# Если все еще нет цели, плавно сближаемся с idle_patrol_angle
+				var angle_diff = wrapf(idle_patrol_angle - rotation, -PI, PI)
+				var max_turn_rate = turn_speed * delta
+				var turn_amount = clamp(angle_diff, -max_turn_rate, max_turn_rate)
+				rotation += turn_amount
+				
+				# После достижения курса добавляем небольшое покачивание
+				if abs(angle_diff) < 0.05:  # Если почти достигли целевого угла
+					var wiggle := sin(Time.get_ticks_msec() * 0.001) * 0.02
+					rotation += wiggle * delta
+				return
+		
+		# Проверяем, жив ли игрок
+		var player_alive = target_player.get("is_alive")
+		if player_alive == false:
+			target_player = null
 			return
+		
+		target_position = target_player.global_position
 	
-	# Проверяем, жив ли игрок
-	var player_alive = target_player.get("is_alive")
-	if player_alive == false:
-		target_player = null
-		return
+	# Вычисляем направление к цели
+	var to_target = target_position - global_position
+	var distance_to_target = to_target.length()
 	
-	# Вычисляем направление к игроку
-	var to_player = target_player.global_position - global_position
-	var distance_to_player = to_player.length()
+	# Определяем минимальную дистанцию в зависимости от цели
+	var min_distance = 20.0 if is_chasing_pickup else 98.0
 	
-	# Если игрок слишком далеко, летим к нему
-	if distance_to_player > 98.0:
-		var desired_angle = to_player.angle()
+	# Если цель далеко, летим к ней
+	if distance_to_target > min_distance:
+		var desired_angle = to_target.angle()
 		var current_angle = rotation
 		
 		# Вычисляем разность углов
@@ -195,12 +215,12 @@ func _ai_movement(delta: float) -> void:
 		while angle_diff < -PI:
 			angle_diff += 2.0 * PI
 		
-		# Поворачиваемся к игроку с ограниченной скоростью
+		# Поворачиваемся к цели с ограниченной скоростью
 		var max_turn_rate = turn_speed * delta
 		var turn_amount = clamp(angle_diff, -max_turn_rate, max_turn_rate)
 		rotation += turn_amount
 	else:
-		# Если игрок близко, добавляем небольшие покачивания для более естественного движения
+		# Если цель близко, добавляем небольшие покачивания для более естественного движения
 		var wiggle := sin(Time.get_ticks_msec() * 0.002) * 0.05
 		rotation += wiggle * delta
 
@@ -213,10 +233,6 @@ func _process(_dt: float) -> void:
 		var to_player = (target_player.global_position - global_position).normalized()
 		var angle_to_player = Vector2.RIGHT.rotated(rotation).angle_to(to_player)
 		
-		# Отладка каждые несколько кадров
-		if int(Time.get_ticks_msec() / 100.0) % 20 == 0:  # Каждые 2 секунды
-			print("Enemy aiming: angle_to_player=", abs(angle_to_player), " threshold=0.14")
-		
 		if abs(angle_to_player) < 0.14:  # Если игрок в прицеле
 			_shoot()
 
@@ -224,10 +240,6 @@ func _process(_dt: float) -> void:
 #   VERTICAL & COLLISIONS
 # ==========================
 func _vertical_update(delta: float) -> void:
-	# Отладка каждые несколько кадров
-	if int(Time.get_ticks_msec() / 100.0) % 10 == 0:  # Каждую секунду
-		print("Enemy vertical: altitude=", altitude, " v_alt=", v_alt, " is_grounded=", is_grounded, " speed=", speed)
-	
 	var lift_from_speed: float = _lift_factor_from_speed(speed) * lift_speed_coeff * speed
 	var lift_from_throttle: float = lift_throttle_coeff * 0.5
 	
@@ -261,10 +273,6 @@ func _vertical_update(delta: float) -> void:
 		v_alt = clamp(v_alt, -max_climb_rate, max_climb_rate)
 		altitude += v_alt * delta
 		
-		# Отладка падения
-		if v_alt < -50.0:  # Если падаем быстро
-			print("Enemy falling fast: v_alt=", v_alt, " altitude=", altitude)
-		
 		var max_altitude: float = 200.0
 		if altitude > max_altitude:
 			altitude = max_altitude
@@ -275,7 +283,6 @@ func _vertical_update(delta: float) -> void:
 			altitude = 0.0
 			v_alt = 0.0
 			is_grounded = true
-			print("Enemy grounded due to altitude <= 0.0")
 	else:
 		altitude = 0.0
 		v_alt = 0.0
@@ -289,34 +296,21 @@ func _vertical_update(delta: float) -> void:
 			altitude += v_alt * delta
 
 func _check_groundkill_collisions() -> void:
-	print("Enemy _check_groundkill_collisions called")
-	# Отладка: проверяем расстояние до земли
-	var ground_y: float = 706.0
-	var distance_to_ground: float = ground_y - global_position.y
-	if int(Time.get_ticks_msec() / 100.0) % 10 == 0:  # Каждую секунду
-		print("Enemy ground check: pos_y=", global_position.y, " distance_to_ground=", distance_to_ground, " altitude=", altitude, " is_grounded=", is_grounded)
-	
 	var collision_count = get_slide_collision_count()
-	if collision_count > 0:
-		print("Enemy has ", collision_count, " collisions")
 	
 	for i in range(collision_count):
 		var c: KinematicCollision2D = get_slide_collision(i)
 		var col := c.get_collider()
 		if col == null:
 			continue
-		print("Enemy collision with: ", col.name, " at position: ", c.get_position())
 		var hit_kill: bool = false
 		if col is Node:
 			var n := col as Node
 			if ground_kill_group != "" and n.is_in_group(ground_kill_group):
 				hit_kill = true
-				print("Enemy hit GroundKill by group: ", ground_kill_group, " at position: ", c.get_position())
 			elif ground_kill_name != "" and n.name == ground_kill_name:
 				hit_kill = true
-				print("Enemy hit GroundKill by name: ", ground_kill_name, " at position: ", c.get_position())
 		if hit_kill:
-			print("Enemy exploding due to GroundKill collision at position: ", c.get_position())
 			_explode(c.get_position(), false)  # Не убит игроком - столкновение с землей
 			return
 
@@ -344,10 +338,6 @@ func _wrap_around_screen() -> void:
 # ==========================
 func _shoot() -> void:
 	can_shoot = false
-	if target_player:
-		print("Enemy shooting at player! Enemy pos: ", global_position, " Player pos: ", target_player.global_position)
-	else:
-		print("Enemy shooting at player! Enemy pos: ", global_position, " Player pos: ", "no target")
 	var scene: PackedScene = preload("res://scenes/Bullet.tscn")
 	var b := scene.instantiate() as Node2D
 	b.global_position = muzzle.global_position
@@ -362,29 +352,22 @@ func _shoot() -> void:
 	can_shoot = true
 
 func apply_damage(amount: int, from_player: bool = true) -> void:
-	print("Enemy apply_damage called with amount: ", amount, " is_alive: ", is_alive, " invulnerable: ", invulnerable)
 	if not is_alive or invulnerable:
-		print("Enemy damage blocked - not alive or invulnerable")
 		return
 	
-	print("Enemy taking damage: ", amount, " HP before: ", hp)
 	hp -= amount
-	print("Enemy HP after damage: ", hp)
 	
 	if hp <= 0:
-		print("Enemy exploding due to HP <= 0")
 		_explode(global_position, from_player)
 
 func _explode(hit_pos: Vector2, killed_by_player: bool = true) -> void:
 	if not is_alive:
 		return
 	
-	print("Enemy _explode called at position: ", hit_pos, " current position: ", global_position)
 	
 	# Регистрируем убийство, если враг был убит игроком
 	if killed_by_player:
 		GameState.add_kill()
-		print("Player killed enemy! Total kills: ", GameState.kills, " Score: ", GameState.score)
 	
 	# Объявляем переменную для коллайдера
 	var collision_shape = get_node_or_null("CollisionShape2D")
@@ -432,7 +415,6 @@ func _explode(hit_pos: Vector2, killed_by_player: bool = true) -> void:
 		target_player = null
 		remove_from_group("enemy")
 		
-		print("Enemy defeated, removing from scene")
 		
 		# Удаляем врага без респавна
 		queue_free()
@@ -469,7 +451,6 @@ func _explode(hit_pos: Vector2, killed_by_player: bool = true) -> void:
 	target_player = null
 	remove_from_group("enemy")
 	
-	print("Enemy exploded, respawn in ", respawn_delay, " seconds")
 	
 	# Респавн
 	await get_tree().create_timer(respawn_delay).timeout
@@ -482,7 +463,6 @@ func _respawn() -> void:
 	# Используем точку спавна если она задана
 	if spawn_path and has_node(spawn_path):
 		var spawn_node = get_node(spawn_path)
-		print("Enemy respawn at spawn point: ", spawn_node.global_position)
 		# Рассчитываем правильную Y-координату на основе высоты над землей
 		var ground_y: float = 706.0  # Y-координата земли (GroundKill)
 		var spawn_y: float = ground_y - start_altitude
@@ -495,7 +475,6 @@ func _respawn() -> void:
 		var ground_y: float = 706.0  # Y-координата земли (GroundKill)
 		var spawn_y: float = ground_y - start_altitude
 		var spawn_position = Vector2(spawn_x, spawn_y)
-		print("Enemy respawn at fallback position: ", spawn_position)
 		global_position = spawn_position
 		altitude = start_altitude
 	
@@ -523,7 +502,6 @@ func _respawn() -> void:
 	# Возвращаем в группу
 	add_to_group("enemy")
 	
-	print("Enemy respawned successfully at: ", global_position, " altitude: ", altitude)
 	
 	# Ищем игрока
 	_find_player()
@@ -534,21 +512,16 @@ func _respawn() -> void:
 	# Временная неуязвимость (уже установлена в начале функции)
 	await get_tree().create_timer(invuln_time).timeout
 	invulnerable = false
-	print("Enemy invulnerability ended")
 
 func _find_player() -> void:
 	target_player = null
-	print("Enemy searching for player...")
 	
 	var players := get_tree().get_nodes_in_group("player")
-	print("Found players in group: ", players.size())
 	for p in players:
 		var alive_prop: bool = p.get("is_alive")
-		print("Player ", p.name, " is_alive: ", alive_prop)
 		if alive_prop == false:
 			continue
 		target_player = p
-		print("Enemy found target player: ", p.name, " at position: ", p.global_position)
 		return
 	
 	var scene := get_tree().current_scene
@@ -556,13 +529,62 @@ func _find_player() -> void:
 		var pl := scene.get_node_or_null("Player")
 		if pl and is_instance_valid(pl):
 			var alive_prop2: bool = pl.get("is_alive")
-			print("Found Player node directly, is_alive: ", alive_prop2)
 			if alive_prop2 != false:
 				target_player = pl
-				print("Enemy found target player directly: ", pl.name, " at position: ", pl.global_position)
+
+func _find_nearest_life_pickup() -> void:
+	"""Ищет ближайшее сердечко на карте"""
+	# Сбрасываем старую цель если она уже недействительна
+	if target_life_pickup != null and not is_instance_valid(target_life_pickup):
+		target_life_pickup = null
 	
-	if target_player == null:
-		print("Enemy could not find any player!")
+	# Если уже есть валидная цель и мы не на максимуме жизней, продолжаем её преследовать
+	if target_life_pickup != null and lives < max_lives:
+		return
+	
+	# Если жизни заполнены, сбрасываем цель
+	if lives >= max_lives:
+		target_life_pickup = null
+		return
+	
+	# Ищем все сердечки на сцене
+	var scene = get_tree().current_scene
+	if not scene:
+		return
+	
+	var pickups = []
+	for child in scene.get_children():
+		if child.is_in_group("life_pickup") or child.name.contains("LifePickup"):
+			pickups.append(child)
+	
+	# Если сердечек нет, выходим
+	if pickups.is_empty():
+		target_life_pickup = null
+		return
+	
+	# Находим ближайшее сердечко
+	var closest_pickup = null
+	var closest_distance = INF
+	
+	for pickup in pickups:
+		if is_instance_valid(pickup):
+			var distance = global_position.distance_to(pickup.global_position)
+			if distance < closest_distance:
+				closest_distance = distance
+				closest_pickup = pickup
+	
+	target_life_pickup = closest_pickup
+
+func add_life(amount: int = 1) -> void:
+	"""Добавляет жизни врагу (не превышает max_lives)"""
+	lives = clamp(lives + amount, 0, max_lives)
+	
+	var hud = get_tree().current_scene.get_node_or_null("HUD")
+	if hud:
+		hud.update_enemy_lives(lives)
+	
+	# Сбрасываем цель на сердечко после подбора
+	target_life_pickup = null
 
 # ==========================
 #     HELPERS
@@ -602,7 +624,6 @@ func _check_plane_collisions() -> void:
 			if player.has_method("get_is_alive") and player.get_is_alive():
 				if not (player.has_method("is_invulnerable") and player.is_invulnerable()):
 					# Столкновение! Взрываем оба самолета
-					print("Enemy collided with player at position: ", c.get_position())
 					_explode(c.get_position(), false)  # Столкновение, а не убийство игроком
 					# Также взрываем игрока
 					if player.has_method("explode_on_ground"):
@@ -613,4 +634,3 @@ func _start_shooting_delay() -> void:
 	shooting_started = false
 	await get_tree().create_timer(shooting_delay).timeout
 	shooting_started = true
-	print("Enemy started shooting after delay")

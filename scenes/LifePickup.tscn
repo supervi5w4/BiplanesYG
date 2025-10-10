@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3 uid="uid://cpqvxm7y8nrqd"]
+
+[ext_resource type="Script" uid="uid://cwf8m3laxvnpt" path="res://scripts/LifePickup.gd" id="1_lifepickup"]
+[ext_resource type="Texture2D" uid="uid://ddovpsfblxggj" path="res://assets/sprites/heart_full.png" id="2_heart"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_life"]
+radius = 16.0
+
+[node name="LifePickup" type="Area2D"]
+script = ExtResource("1_lifepickup")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.1, 0.1)
+texture = ExtResource("2_heart")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+scale = Vector2(1.7599993, 1.7200003)
+shape = SubResource("CircleShape2D_life")

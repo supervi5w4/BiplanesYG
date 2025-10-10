@@ -297,19 +297,11 @@ func explode_on_ground(hit_pos: Vector2) -> void:
 
 func _respawn() -> void:
 	# Используем точку спавна если она задана
-	print("Player spawn_path: ", spawn_path)
-	if spawn_path:
-		print("Player has_node(spawn_path): ", has_node(spawn_path))
-	else:
-		print("Player has_node(spawn_path): spawn_path is null")
-	
 	if spawn_path and has_node(spawn_path):
 		var spawn_node = get_node(spawn_path)
-		print("Player respawn at spawn point: ", spawn_node.global_position)
 		global_position = spawn_node.global_position
 	else:
 		# Fallback к жестко заданной позиции
-		print("Player respawn at fallback position: ", Vector2(81, 108))
 		global_position = Vector2(81, 108)
 	
 	# Устанавливаем правильную ориентацию - горизонтальный полет
@@ -360,6 +352,13 @@ func _get_orientation_speed_modifier() -> float:
 	var speed_modifier = 1.0 - (orientation_penalty * orientation_speed_factor * max_orientation_penalty)
 	
 	return clamp(speed_modifier, 1.0 - max_orientation_penalty, 1.0)
+
+func add_life(amount: int = 1) -> void:
+	"""Добавляет жизни игроку (не превышает max_lives)"""
+	lives = clamp(lives + amount, 0, max_lives)
+	var hud = get_tree().current_scene.get_node_or_null("HUD")
+	if hud:
+		hud.update_player_lives(lives)
 
 func get_altitude() -> float:
 	return altitude
@@ -424,7 +423,6 @@ func _check_plane_collisions() -> void:
 			if enemy.has_method("get_is_alive") and enemy.get_is_alive():
 				if not (enemy.has_method("is_invulnerable") and enemy.is_invulnerable()):
 					# Столкновение! Взрываем оба самолета
-					print("Player collided with enemy at position: ", c.get_position())
 					explode_on_ground(c.get_position())
 					# Также взрываем врага
 					if enemy.has_method("_explode"):

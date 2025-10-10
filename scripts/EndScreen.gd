@@ -151,12 +151,11 @@ func _on_share_pressed():
 	"""Обработчик нажатия кнопки 'Поделиться'"""
 	# Если это Яндекс.Игры, вызываем API для шаринга
 	if OS.has_feature("yandex") and YandexSDK:
-		var share_text = "Я играю в Biplanes! Мой счет: %d" % GameState.score
+		var _share_text = "Я играю в Biplanes! Мой счет: %d" % GameState.score
 		# Здесь можно добавить вызов YandexSDK для шаринга
-		print("Поделиться: ", share_text)
 	else:
 		# В других случаях просто выводим сообщение
-		print("Функция 'Поделиться' доступна только в Яндекс.Играх")
+		print("Поделиться результатами: Счет %d" % GameState.score)
 	
 	# Можно добавить визуальную обратную связь
 	share_button.disabled = true
