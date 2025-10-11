@@ -1,0 +1,39 @@
+[gd_scene load_steps=5 format=3 uid="uid://campaign_enemy_001"]
+
+[ext_resource type="Script" path="res://scripts/Enemy_campaign1.gd" id="1_enemy"]
+[ext_resource type="Texture2D" uid="uid://nrc8b6o87so3" path="res://assets/sprites/enemy_plane_1.png" id="2_55jtl"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_shield"]
+blend_mode = 1
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_enemy"]
+radius = 9.0
+
+[node name="Enemy" type="CharacterBody2D" groups=["enemy"]]
+collision_layer = 2
+collision_mask = 1
+position = Vector2(1029, 102)
+scale = Vector2(1, 1)
+script = ExtResource("1_enemy")
+max_lives = 5
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(-0.15, -0.15)
+texture = ExtResource("2_55jtl")
+
+[node name="Muzzle" type="Node2D" parent="."]
+
+[node name="ShieldAura" type="Sprite2D" parent="."]
+material = SubResource("CanvasItemMaterial_shield")
+visible = false
+self_modulate = Color(0.3, 0.8, 2, 1)
+z_index = 1
+scale = Vector2(-0.2, -0.2)
+texture = ExtResource("2_55jtl")
+texture_filter = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(3.9999998, 0)
+scale = Vector2(4.581811, 2.1086223)
+shape = SubResource("CircleShape2D_enemy")
+

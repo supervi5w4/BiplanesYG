@@ -6,9 +6,10 @@ extends CanvasLayer
 @export var heart_empty_texture: Texture2D
 
 # Ссылки на узлы HUD
-@onready var player_hearts_container: HBoxContainer = $PlayerHearts
-@onready var enemy_hearts_container: HBoxContainer = $EnemyHearts
-@onready var game_status_label: Label = $GameStatusLabel
+@onready var player_hearts_container: HBoxContainer = get_node_or_null("PlayerHearts")
+@onready var enemy_hearts_container: HBoxContainer = get_node_or_null("EnemyHearts")
+@onready var game_status_label: Label = get_node_or_null("GameStatusLabel")
+@onready var player_hp_bar: ProgressBar = get_node_or_null("PlayerHPBar")
 
 # Массивы для хранения ссылок на TextureRect узлы сердец
 var player_hearts: Array[TextureRect] = []
@@ -26,15 +27,16 @@ var end_screen_scene: PackedScene = preload("res://scenes/EndScreen.tscn")
 var end_screen_instance: CanvasLayer = null
 
 func _ready():
-	# Инициализация массивов сердец
-	initialize_hearts()
-	
-	# Установка начальных значений жизней
-	update_player_lives(max_lives)
-	update_enemy_lives(max_lives)
-	
-	# Обновление отображения сердец
-	_update_hearts()
+	# Инициализация массивов сердец (только если они есть)
+	if player_hearts_container or enemy_hearts_container:
+		initialize_hearts()
+		
+		# Установка начальных значений жизней
+		update_player_lives(max_lives)
+		update_enemy_lives(max_lives)
+		
+		# Обновление отображения сердец
+		_update_hearts()
 	
 	# Подключаемся к сигналу завершения игры
 	GameState.game_ended.connect(_on_game_ended)
@@ -50,13 +52,15 @@ func _init_end_screen():
 func initialize_hearts():
 	"""Инициализирует массивы сердец из дочерних узлов"""
 	# Получаем все TextureRect узлы из контейнеров сердец
-	for child in player_hearts_container.get_children():
-		if child is TextureRect:
-			player_hearts.append(child)
+	if player_hearts_container:
+		for child in player_hearts_container.get_children():
+			if child is TextureRect:
+				player_hearts.append(child)
 	
-	for child in enemy_hearts_container.get_children():
-		if child is TextureRect:
-			enemy_hearts.append(child)
+	if enemy_hearts_container:
+		for child in enemy_hearts_container.get_children():
+			if child is TextureRect:
+				enemy_hearts.append(child)
 
 func _update_hearts():
 	"""Обновляет отображение всех сердец на основе текущих значений жизней"""
@@ -77,12 +81,20 @@ func _update_hearts():
 func update_player_lives(new_lives: int):
 	"""Обновляет количество жизней игрока"""
 	player_lives = clamp(new_lives, 0, max_lives)
-	_update_hearts()
+	if player_hearts.size() > 0:
+		_update_hearts()
 
 func update_enemy_lives(new_lives: int):
 	"""Обновляет количество жизней врага"""
 	enemy_lives = clamp(new_lives, 0, max_lives)
-	_update_hearts()
+	if enemy_hearts.size() > 0:
+		_update_hearts()
+
+func set_player_hp(current: int, max_value: int):
+	"""Устанавливает HP игрока на прогресс-баре (для режима кампании)"""
+	if player_hp_bar:
+		player_hp_bar.max_value = max_value
+		player_hp_bar.value = current
 
 func _on_game_ended(result: String, stats: Dictionary):
 	"""
@@ -131,15 +143,23 @@ func _hide_hud_animated():
 	# Создаем Tween для плавного затухания
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(player_hearts_container, "modulate:a", 0.3, 0.3)
-	tween.tween_property(enemy_hearts_container, "modulate:a", 0.3, 0.3)
+	if player_hearts_container:
+		tween.tween_property(player_hearts_container, "modulate:a", 0.3, 0.3)
+	if enemy_hearts_container:
+		tween.tween_property(enemy_hearts_container, "modulate:a", 0.3, 0.3)
+	if player_hp_bar:
+		tween.tween_property(player_hp_bar, "modulate:a", 0.3, 0.3)
 
 func _show_hud_animated():
 	"""Плавно показывает элементы HUD"""
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(player_hearts_container, "modulate:a", 1.0, 0.3)
-	tween.tween_property(enemy_hearts_container, "modulate:a", 1.0, 0.3)
+	if player_hearts_container:
+		tween.tween_property(player_hearts_container, "modulate:a", 1.0, 0.3)
+	if enemy_hearts_container:
+		tween.tween_property(enemy_hearts_container, "modulate:a", 1.0, 0.3)
+	if player_hp_bar:
+		tween.tween_property(player_hp_bar, "modulate:a", 1.0, 0.3)
 
 func show_result(text: String):
 	"""

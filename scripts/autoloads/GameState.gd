@@ -29,21 +29,18 @@ func start_game(level: int) -> void:
 	
 	_persist()
 
-func end_game(result: String = "") -> void:
-	state = "idle"
-	
-	# Фиксируем время завершения
-	end_time = Time.get_ticks_msec()
-	
-	# Вычисляем статистику
-	var duration_ms: int = end_time - start_time
+func get_stats() -> Dictionary:
+	"""Возвращает текущую статистику игры"""
+	# Вычисляем текущую длительность
+	var current_time = Time.get_ticks_msec()
+	var duration_ms: int = current_time - start_time
 	var duration_sec: float = duration_ms / 1000.0
 	var accuracy: float = 0.0
 	if shots_fired > 0:
 		accuracy = (float(shots_hit) / float(shots_fired)) * 100.0
 	
 	# Формируем словарь статистики
-	var stats: Dictionary = {
+	return {
 		"player_lives": 0,  # Будет установлено HUD'ом
 		"enemy_lives": 0,   # Будет установлено HUD'ом
 		"score": score,
@@ -53,6 +50,15 @@ func end_game(result: String = "") -> void:
 		"accuracy": accuracy,
 		"duration_sec": duration_sec
 	}
+
+func end_game(result: String = "") -> void:
+	state = "idle"
+	
+	# Фиксируем время завершения
+	end_time = Time.get_ticks_msec()
+	
+	# Получаем статистику
+	var stats: Dictionary = get_stats()
 	
 	# Отправляем сигнал о завершении игры
 	emit_signal("game_ended", result, stats)

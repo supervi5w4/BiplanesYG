@@ -1,6 +1,6 @@
 extends CharacterBody2D
 # ─────────────────────────────────────────────────────────────────────────────
-# Enemy.gd — МАКСИМАЛЬНО ПРОСТОЙ ИИ (как Player.gd)
+# Enemy_campaign1.gd — Враг для режима кампании
 # ─────────────────────────────────────────────────────────────────────────────
 
 # === БАЗОВОЕ ДВИЖЕНИЕ (как у игрока) ===
@@ -42,7 +42,7 @@ extends CharacterBody2D
 # === СТРЕЛЬБА ===
 @export var fire_cooldown: float = 0.8
 @export var bullet_speed: float = 820.0
-@export var shooting_delay: float = 2.0  # Задержка перед началом стрельбы
+@export var shooting_delay: float = 0.3  # Задержка перед началом стрельбы
 
 # === ВЗРЫВ / РЕСПАВН ===
 @export var explosion_scene: PackedScene
@@ -197,7 +197,7 @@ func _ai_movement(delta: float) -> void:
 			var distance_x = enemy_x - player_x
 			
 			# Если враг СПРАВА от игрока (еще не встретились) - летим прямо влево
-			if distance_x > 200:
+			if distance_x > 500:
 				# Просто держим курс влево для встречного боя
 				var straight_angle_diff = wrapf(idle_patrol_angle - rotation, -PI, PI)
 				var straight_turn_rate = turn_speed * delta * 0.5
@@ -326,7 +326,7 @@ func _process(_dt: float) -> void:
 		var to_player = (target_player.global_position - global_position).normalized()
 		var angle_to_player = Vector2.RIGHT.rotated(rotation).angle_to(to_player)
 		
-		if abs(angle_to_player) < 0.14:  # Если игрок в прицеле
+		if abs(angle_to_player) < 0.7:  # Если игрок в прицеле
 			_shoot()
 
 # ==========================
@@ -556,6 +556,14 @@ func _explode(hit_pos: Vector2, killed_by_player: bool = true) -> void:
 	_respawn()
 
 func _respawn() -> void:
+	# В режиме кампании враги не респавнятся - их создает EnemySpawner
+	if campaign_mode:
+		print("[DEBUG SPAWN] === ENEMY RESPAWN BLOCKED (Campaign Mode) ===")
+		print("[DEBUG SPAWN] Враг в режиме кампании не респавнится, удаляется")
+		print("[DEBUG SPAWN] ==================")
+		queue_free()
+		return
+	
 	# Сразу устанавливаем неуязвимость для защиты от пуль
 	invulnerable = true
 	
@@ -568,9 +576,31 @@ func _respawn() -> void:
 		global_position = Vector2(spawn_node.global_position.x, spawn_y)
 		altitude = start_altitude
 	else:
-		# Fallback к случайной позиции справа от экрана
+		# Fallback к позиции справа от игрока/камеры (для режима арены)
+		var camera = get_viewport().get_camera_2d()
 		var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-		var spawn_x: float = viewport_size.x + 200.0
+		var player = get_tree().get_first_node_in_group("player")
+		
+		var spawn_x: float
+		if player:
+			# Респавним минимум на 300 единиц правее игрока
+			var spawn_offset = 300.0
+			var player_spawn_x = player.global_position.x + spawn_offset
+			
+			# Также вычисляем правый край экрана (от камеры)
+			var screen_right_edge = viewport_size.x + 200
+			if camera:
+				screen_right_edge = camera.global_position.x + viewport_size.x / 2 + 200
+			
+			# Выбираем максимум - враг должен быть И справа от игрока, И за экраном
+			spawn_x = max(player_spawn_x, screen_right_edge)
+		elif camera:
+			# Fallback: если игрок не найден, респавним справа от камеры
+			spawn_x = camera.global_position.x + viewport_size.x / 2 + 200
+		else:
+			# Fallback: если ничего не найдено
+			spawn_x = viewport_size.x + 200
+		
 		var ground_y: float = 706.0  # Y-координата земли (GroundKill)
 		var spawn_y: float = ground_y - start_altitude
 		var spawn_position = Vector2(spawn_x, spawn_y)
@@ -841,3 +871,4 @@ func _blink_before_end() -> void:
 		await get_tree().create_timer(0.1).timeout
 		aura.visible = true
 		await get_tree().create_timer(0.1).timeout
+

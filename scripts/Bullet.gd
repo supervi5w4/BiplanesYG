@@ -11,12 +11,25 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	global_position += velocity * delta
 	
-	# Проверка на выход за границы экрана - удаляем пулю
-	var viewport_rect := get_viewport_rect()
-	var safe_rect := viewport_rect.grow(50)  # Небольшой запас для корректного удаления
-	
-	if not safe_rect.has_point(global_position):
-		queue_free()
+	# Проверка на выход за границы ОТНОСИТЕЛЬНО КАМЕРЫ
+	var camera = get_viewport().get_camera_2d()
+	if camera:
+		# Получаем видимую область камеры в мировых координатах
+		var viewport_size = get_viewport_rect().size
+		var camera_rect = Rect2(
+			camera.global_position - viewport_size / 2,
+			viewport_size
+		)
+		var safe_rect = camera_rect.grow(200)  # Запас 200 пикселей
+		
+		if not safe_rect.has_point(global_position):
+			queue_free()
+	else:
+		# Fallback для режима без камеры (старый код)
+		var viewport_rect := get_viewport_rect()
+		var safe_rect := viewport_rect.grow(50)
+		if not safe_rect.has_point(global_position):
+			queue_free()
 
 func _on_Bullet_body_entered(body: Node) -> void:
 	

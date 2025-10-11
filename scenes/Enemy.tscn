@@ -10,13 +10,15 @@ blend_mode = 1
 radius = 9.0
 
 [node name="Enemy" type="CharacterBody2D" groups=["enemy"]]
+collision_layer = 2
+collision_mask = 1
 position = Vector2(1029, 102)
-scale = Vector2(-1, 1)
+scale = Vector2(1, 1)
 script = ExtResource("1_enemy")
 max_lives = 5
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(-0.15, 0.15)
+scale = Vector2(-0.15, -0.15)
 texture = ExtResource("2_55jtl")
 
 [node name="Muzzle" type="Node2D" parent="."]
@@ -26,7 +28,7 @@ material = SubResource("CanvasItemMaterial_shield")
 visible = false
 self_modulate = Color(0.3, 0.8, 2, 1)
 z_index = 1
-scale = Vector2(-0.2, 0.2)
+scale = Vector2(-0.2, -0.2)
 texture = ExtResource("2_55jtl")
 texture_filter = 1
 

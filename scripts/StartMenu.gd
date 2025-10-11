@@ -24,6 +24,9 @@ func _on_data_loaded(data: Dictionary) -> void:
 func _on_button_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/battlefield.tscn")
 
+func _on_campaign_button_pressed() -> void:
+	get_tree().change_scene_to_file("res://scenes/campaign/level1.tscn")
+
 func _on_viewport_size_changed() -> void:
 	# Пересчитываем размеры при изменении размера окна
 	call_deferred("_setup_button_style")
@@ -42,21 +45,25 @@ func _setup_button_style() -> void:
 	button_height = max(button_height, 35)  # Минимум 35px (было 40px)
 	button_height = min(button_height, int(screen_size.y * 0.1))  # Максимум 10% от высоты
 	
-	# Стилизуем кнопку
-	var button = $VBoxContainer/Button
-	if button:
+	# Стилизуем обе кнопки
+	var buttons = [$VBoxContainer/Button, $VBoxContainer/ButtonCampaign]
+	for button in buttons:
+		if not button:
+			continue
+			
 		# Дополнительная проверка - убеждаемся что кнопка помещается в контейнер
 		var container_width = $VBoxContainer.size.x
+		var btn_width = button_width
 		if container_width > 0:  # Если контейнер уже имеет размер
-			button_width = min(button_width, int(container_width * 0.9))  # Максимум 90% от контейнера
+			btn_width = min(btn_width, int(container_width * 0.9))  # Максимум 90% от контейнера
 		
 		# Устанавливаем адаптивный размер
-		button.custom_minimum_size = Vector2(button_width, button_height)
+		button.custom_minimum_size = Vector2(btn_width, button_height)
 		
 		# Создаем пиксельные текстуры для кнопки
-		var normal_texture = _create_pixel_button_texture(button_width, button_height, false)
-		var hover_texture = _create_pixel_button_texture(button_width, button_height, true)
-		var pressed_texture = _create_pixel_button_texture(button_width, button_height, false, true)
+		var normal_texture = _create_pixel_button_texture(btn_width, button_height, false)
+		var hover_texture = _create_pixel_button_texture(btn_width, button_height, true)
+		var pressed_texture = _create_pixel_button_texture(btn_width, button_height, false, true)
 		
 		# Создаем стиль кнопки с пиксельными текстурами
 		var button_style = StyleBoxTexture.new()
